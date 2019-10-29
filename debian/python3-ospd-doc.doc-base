@@ -1,0 +1,13 @@
+Document: osp
+Title: OSP - Open Scanner Protocol Manual
+Author: Greenbone Networks GmbH
+Abstract: The Open Scanner Protocol is designed to
+ allow controlling various vulnerability scanners.
+ These scanners must either offer the protocol OSP
+ on their own or be connected via an adapter
+ ("OSP wrapper").
+Section: Network/Communication
+
+Format: HTML
+Index: /usr/share/doc/python3-ospd-doc/osp.html
+Files: /usr/share/doc/python3-ospd-doc/osp.html

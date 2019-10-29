@@ -1,0 +1,5 @@
+version=3
+
+opts=uversionmangle=s/\.beta/~beta/ \
+https://github.com/greenbone/ospd/releases  \
+        /greenbone/ospd/archive/v(.*)\.tar\.gz

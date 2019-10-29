@@ -1,0 +1,47 @@
+Source: ospd
+Section: python
+Priority: optional
+Maintainer: Mohammad Razavi <mrazavi64@gmail.com>
+Build-Depends: debhelper (>= 10), dh-python, python3-all, python3-setuptools, python3-lxml, python3-defusedxml, python3-paramiko, xsltproc
+Standards-Version: 4.1.2
+Homepage: https://community.greenbone.net/
+X-Python3-Version: >= 3.2
+Vcs-Git: https://github.com/admirito/ospd.git
+Vcs-Browser: https://github.com/admirito/ospd
+Testsuite: autopkgtest-pkg-python
+
+Package: python3-ospd
+Architecture: all
+Depends: ${python3:Depends}, ${misc:Depends}
+Suggests: python3-ospd-doc
+Description: base class for scanner wrappers with OSP (Open Scanner Protocol)
+ OSPD is a base class for scanner wrappers which share the same
+ communication protocol: OSP (Open Scanner Protocol). OSP creates a
+ unified interface for different security scanners and makes their
+ control flow and scan results consistently available under the
+ central Greenbone Vulnerability Manager service.
+ .
+ OSP is similar in many ways to GMP (Greenbone Management Protocol):
+ XML-based, stateless and non-permanent connection.
+ .
+ The design supports wrapping arbitrary scanners with same protocol
+ OSP, sharing the core daemon options while adding scanner specific
+ parameters and options.
+
+Package: python3-ospd-doc
+Architecture: all
+Section: doc
+Depends: ${sphinxdoc:Depends}, ${misc:Depends}
+Description: base class for scanner wrappers with OSP - docs
+ OSPD is a base class for scanner wrappers which share the same
+ communication protocol: OSP (Open Scanner Protocol). OSP creates a
+ unified interface for different security scanners and makes their
+ control flow and scan results consistently available under the
+ central Greenbone Vulnerability Manager service.
+ .
+ OSP is similar in many ways to GMP (Greenbone Management Protocol):
+ XML-based, stateless and non-permanent connection.
+ .
+ The design supports wrapping arbitrary scanners with same protocol
+ OSP, sharing the core daemon options while adding scanner specific
+ parameters and options.
