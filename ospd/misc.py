@@ -101,6 +101,21 @@ class ScanCollection(object):
         # Set scan_info's results to propagate results to parent process.
         self.scans_table[scan_id]['results'] = results
 
+    def remove_hosts_from_target_progress(self, scan_id, target, hosts):
+        """Remove a list of hosts from the main scan progress table to avoid
+        the hosts to be included in the calculation of the scan progress"""
+        if not hosts:
+            return
+
+        targets = self.scans_table[scan_id]['target_progress']
+        for host in hosts:
+            if host in targets[target]:
+                del targets[target][host]
+
+        # Set scan_info's target_progress to propagate progresses
+        # to parent process.
+        self.scans_table[scan_id]['target_progress'] = targets
+
     def set_progress(self, scan_id, progress):
         """ Sets scan_id scan's progress. """
 
@@ -121,7 +136,10 @@ class ScanCollection(object):
     def set_host_finished(self, scan_id, target, host):
         """ Add the host in a list of finished hosts """
         finished_hosts = self.scans_table[scan_id]['finished_hosts']
-        finished_hosts[target].append(host)
+
+        if host not in finished_hosts[target]:
+            finished_hosts[target].append(host)
+
         self.scans_table[scan_id]['finished_hosts'] = finished_hosts
 
     def get_hosts_unfinished(self, scan_id):
@@ -216,6 +234,8 @@ class ScanCollection(object):
             and self.id_exists(scan_id)
             and (self.get_status(scan_id) == ScanStatus.STOPPED)
         ):
+            self.scans_table[scan_id]['end_time'] = 0
+
             return self.resume_scan(scan_id, options)
 
         if not options:
@@ -223,17 +243,17 @@ class ScanCollection(object):
         scan_info = self.data_manager.dict()
         scan_info['results'] = list()
         scan_info['finished_hosts'] = dict(
-            [[target, []] for target, _, _, _ in targets]
+            [[target, []] for target, _, _, _, _ in targets]
         )
         scan_info['progress'] = 0
         scan_info['target_progress'] = dict(
-            [[target, {}] for target, _, _, _ in targets]
+            [[target, {}] for target, _, _, _, _ in targets]
         )
         scan_info['targets'] = targets
         scan_info['vts'] = vts
         scan_info['options'] = options
         scan_info['start_time'] = int(time.time())
-        scan_info['end_time'] = "0"
+        scan_info['end_time'] = 0
         scan_info['status'] = ScanStatus.INIT
         if scan_id is None or scan_id == '':
             scan_id = str(uuid.uuid4())
@@ -244,6 +264,8 @@ class ScanCollection(object):
     def set_status(self, scan_id, status):
         """ Sets scan_id scan's status. """
         self.scans_table[scan_id]['status'] = status
+        if status == ScanStatus.STOPPED:
+            self.scans_table[scan_id]['end_time'] = int(time.time())
 
     def get_status(self, scan_id):
         """ Get scan_id scans's status."""
@@ -265,17 +287,40 @@ class ScanCollection(object):
 
         return self.scans_table[scan_id]['progress']
 
+    def simplify_exclude_host_list(self, scan_id, target):
+        """ Remove from exclude_hosts the received hosts in the finished_hosts
+        list sent by the client.
+        The finished hosts are sent also as exclude hosts for backward
+        compatibility purposses.
+        """
+
+        exc_hosts_list = target_str_to_list(
+            self.get_exclude_hosts(scan_id, target)
+        )
+
+        finished_hosts_list = target_str_to_list(
+            self.get_finished_hosts(scan_id, target)
+        )
+        if finished_hosts_list and exc_hosts_list:
+            for finished in finished_hosts_list:
+                if finished in exc_hosts_list:
+                    exc_hosts_list.remove(finished)
+
+        return exc_hosts_list
+
     def get_target_progress(self, scan_id, target):
         """ Get a target's current progress value.
         The value is calculated with the progress of each single host
         in the target."""
 
         total_hosts = len(target_str_to_list(target))
+        exc_hosts_list = self.simplify_exclude_host_list(scan_id, target)
+        exc_hosts = len(exc_hosts_list) if exc_hosts_list else 0
         host_progresses = self.scans_table[scan_id]['target_progress'].get(
             target
         )
         try:
-            t_prog = sum(host_progresses.values()) / total_hosts
+            t_prog = sum(host_progresses.values()) / (total_hosts - exc_hosts)
         except ZeroDivisionError:
             LOGGER.error(
                 "Zero division error in %s", self.get_target_progress.__name__
@@ -297,7 +342,7 @@ class ScanCollection(object):
         """ Get a scan's target list. """
 
         target_list = []
-        for target, _, _, _ in self.scans_table[scan_id]['targets']:
+        for target, _, _, _, _ in self.scans_table[scan_id]['targets']:
             target_list.append(target)
         return target_list
 
@@ -321,6 +366,14 @@ class ScanCollection(object):
             for item in self.scans_table[scan_id]['targets']:
                 if target == item[0]:
                     return item[3]
+
+    def get_finished_hosts(self, scan_id, target):
+        """ Get the finished host list sent by the client for a given target.
+        """
+        if target:
+            for item in self.scans_table[scan_id]['targets']:
+                if target == item[0]:
+                    return item[4]
 
     def get_credentials(self, scan_id, target):
         """ Get a scan's credential list. It return dictionary with
@@ -410,6 +463,7 @@ def go_to_background():
         LOGGER.error('Fork failed: %s', errmsg)
         sys.exit(1)
 
+
 def create_pid(pidfile):
     """ Check if there is an already running daemon and creates the pid file.
     Otherwise gives an error. """
@@ -429,6 +483,7 @@ def create_pid(pidfile):
         return False
 
     return True
+
 
 def remove_pidfile(pidfile, signum=None, frame=None):
     """ Removes the pidfile before ending the daemon. """

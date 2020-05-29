@@ -46,7 +46,7 @@ from ospd.misc import ScanCollection, ResultType, ScanStatus, valid_uuid
 from ospd.network import resolve_hostname, target_str_to_list
 from ospd.server import BaseServer
 from ospd.vtfilter import VtsFilter
-from ospd.xml import simple_response_str, get_result_xml
+from ospd.xml import simple_response_str, get_result_xml, XmlStringHelper
 
 logger = logging.getLogger(__name__)
 
@@ -194,6 +194,8 @@ class OSPDaemon:
 
         self.server_version = None  # Set by the subclass.
 
+        self.scaninfo_store_time = kwargs.get('scaninfo_store_time')
+
         self.protocol_version = PROTOCOL_VERSION
 
         self.commands = COMMANDS_TABLE
@@ -212,11 +214,14 @@ class OSPDaemon:
         else:
             self.vts_filter = VtsFilter()
 
+        self.is_cache_available = False
+
     def init(self):
         """ Should be overridden by a subclass if the initialization is costly.
 
             Will be called before check.
         """
+        self.is_cache_available = True
 
     def set_command_attributes(self, name, attributes):
         """ Sets the xml attributes of a specified command. """
@@ -539,6 +544,7 @@ class OSPDaemon:
         target_list = []
         for target in scanner_target:
             exclude_hosts = ''
+            finished_hosts = ''
             ports = ''
             credentials = {}
             for child in target:
@@ -546,12 +552,16 @@ class OSPDaemon:
                     hosts = child.text
                 if child.tag == 'exclude_hosts':
                     exclude_hosts = child.text
+                if child.tag == 'finished_hosts':
+                    finished_hosts = child.text
                 if child.tag == 'ports':
                     ports = child.text
                 if child.tag == 'credentials':
                     credentials = cls.process_credentials_elements(child)
             if hosts:
-                target_list.append([hosts, ports, credentials, exclude_hosts])
+                target_list.append(
+                    [hosts, ports, credentials, exclude_hosts, finished_hosts]
+                )
             else:
                 raise OspdCommandError('No target to scan', 'start_scan')
 
@@ -576,7 +586,7 @@ class OSPDaemon:
         else:
             scan_targets = []
             for single_target in target_str_to_list(target_str):
-                scan_targets.append([single_target, ports_str, '', ''])
+                scan_targets.append([single_target, ports_str, '', '', ''])
 
         scan_id = scan_et.attrib.get('scan_id')
         if scan_id is not None and scan_id != '' and not valid_uuid(scan_id):
@@ -615,9 +625,15 @@ class OSPDaemon:
             scan_func = self.start_scan
             scan_params = self.process_scan_params(params)
 
+        scan_id_aux = scan_id
         scan_id = self.create_scan(
             scan_id, scan_targets, scan_params, vt_selection
         )
+        if not scan_id:
+            id_ = Element('id')
+            id_.text = scan_id_aux
+            return simple_response_str('start_scan', 100, 'Continue', id_)
+
         scan_process = multiprocessing.Process(
             target=scan_func, args=(scan_id, scan_targets, parallel)
         )
@@ -659,7 +675,13 @@ class OSPDaemon:
         except AttributeError:
             logger.debug('%s: The scanner task stopped unexpectedly.', scan_id)
 
-        os.killpg(os.getpgid(scan_process.ident), 15)
+        try:
+            os.killpg(os.getpgid(scan_process.ident), 15)
+        except ProcessLookupError as e:
+            logger.info(
+                '%s: Scan already stopped %s.', scan_id, scan_process.ident
+            )
+
         if scan_process.ident != os.getpid():
             scan_process.join()
         logger.info('%s: Scan stopped.', scan_id)
@@ -758,8 +780,9 @@ class OSPDaemon:
             logger.debug("Empty client stream")
             return
 
+        response = None
         try:
-            response = self.handle_command(data)
+            self.handle_command(data, stream)
         except OspdCommandError as exception:
             response = exception.as_xml()
             logger.debug('Command error: %s', exception.message)
@@ -767,8 +790,8 @@ class OSPDaemon:
             logger.exception('While handling client command:')
             exception = OspdCommandError('Fatal error', 'error')
             response = exception.as_xml()
-
-        stream.write(response)
+        if response:
+            stream.write(response)
         stream.close()
 
     def parallel_scan(self, scan_id, target):
@@ -838,15 +861,28 @@ class OSPDaemon:
         return sum(t_prog.values()) / len(t_prog)
 
     def process_exclude_hosts(self, scan_id, target_list):
-        """ Process the exclude hosts before launching the scans.
-        Set exclude hosts as finished with 100% to calculate
-        the scan progress."""
+        """ Process the exclude hosts before launching the scans."""
 
-        for target, _, _, exclude_hosts in target_list:
+        for target, _, _, exclude_hosts, _ in target_list:
             exc_hosts_list = ''
             if not exclude_hosts:
                 continue
             exc_hosts_list = target_str_to_list(exclude_hosts)
+            self.remove_scan_hosts_from_target_progress(
+                scan_id, target, exc_hosts_list
+            )
+
+    def process_finished_hosts(self, scan_id, target_list):
+        """ Process the finished hosts before launching the scans.
+        Set finished hosts as finished with 100% to calculate
+        the scan progress."""
+
+        for target, _, _, _, finished_hosts in target_list:
+            exc_hosts_list = ''
+            if not finished_hosts:
+                continue
+            exc_hosts_list = target_str_to_list(finished_hosts)
+
             for host in exc_hosts_list:
                 self.set_scan_host_finished(scan_id, target, host)
                 self.set_scan_host_progress(scan_id, target, host, 100)
@@ -862,6 +898,7 @@ class OSPDaemon:
             raise OspdCommandError('Erroneous targets list', 'start_scan')
 
         self.process_exclude_hosts(scan_id, target_list)
+        self.process_finished_hosts(scan_id, target_list)
 
         for _index, target in enumerate(target_list):
             while len(multiscan_proc) >= parallel:
@@ -877,7 +914,7 @@ class OSPDaemon:
             if self.get_scan_status(scan_id) == ScanStatus.STOPPED:
                 return
 
-            logger.info(
+            logger.debug(
                 "%s: Host scan started on ports %s.", target[0], target[1]
             )
             scan_process = multiprocessing.Process(
@@ -924,6 +961,14 @@ class OSPDaemon:
             value="{0} exec timeout.".format(self.get_scanner_name()),
         )
 
+    def remove_scan_hosts_from_target_progress(
+        self, scan_id, target, exc_hosts_list
+    ):
+        """ Remove a list of hosts from the main scan progress table."""
+        self.scan_collection.remove_hosts_from_target_progress(
+            scan_id, target, exc_hosts_list
+        )
+
     def set_scan_host_finished(self, scan_id, target, host):
         """ Add the host in a list of finished hosts """
         self.scan_collection.set_host_finished(scan_id, target, host)
@@ -935,9 +980,7 @@ class OSPDaemon:
 
     def set_scan_host_progress(self, scan_id, target, host, progress):
         """ Sets host's progress which is part of target. """
-        self.scan_collection.set_host_progress(
-            scan_id, target, host, progress
-        )
+        self.scan_collection.set_host_progress(scan_id, target, host, progress)
 
     def set_scan_status(self, scan_id, status):
         """ Set the scan's status."""
@@ -989,30 +1032,67 @@ class OSPDaemon:
 
     def handle_get_vts_command(self, vt_et):
         """ Handles <get_vts> command.
+        The <get_vts> element accept two optional arguments.
+        vt_id argument receives a single vt id.
+        filter argument receives a filter selecting a sub set of vts.
+        If both arguments are given, the vts which match with the filter
+        are return.
 
         @return: Response string for <get_vts> command.
         """
+        if not self.is_cache_available:
+            try:
+                yield simple_response_str(
+                    'get_vts',
+                    409,
+                    'Conflict',
+                    'A vts update is being performed.',
+                )
+            finally:
+                return
+
+        self.is_cache_available = False
+
+        xml_helper = XmlStringHelper()
 
         vt_id = vt_et.attrib.get('vt_id')
         vt_filter = vt_et.attrib.get('filter')
 
         if vt_id and vt_id not in self.vts:
-            text = "Failed to find vulnerability test '{0}'".format(vt_id)
-            return simple_response_str('get_vts', 404, text)
+            try:
+                text = "Failed to find vulnerability test '{0}'".format(vt_id)
+                yield simple_response_str('get_vts', 404, text)
+            finally:
+                self.is_cache_available = True
+                return
 
         filtered_vts = None
-        if vt_filter:
-            filtered_vts = self.vts_filter.get_filtered_vts_list(
-                self.vts, vt_filter
-            )
+        if not vt_id and vt_filter:
+            try:
+                filtered_vts = self.vts_filter.get_filtered_vts_list(
+                    self.vts, vt_filter
+                )
+            except OspdCommandError as filter_error:
+                self.is_cache_available = True
+                raise OspdCommandError(filter_error)
+        elif vt_id:
+            filtered_vts = vt_id
+        else:
+            filtered_vts = self.vts.keys()
 
-        responses = []
+        yield xml_helper.create_response('get_vts')
+        yield xml_helper.create_element('vts')
 
-        vts_xml = self.get_vts_xml(vt_id, filtered_vts)
+        for vt in self.get_vt_iterator():
+            vt_id, _ = vt
+            if vt_id not in filtered_vts:
+                continue
+            yield xml_helper.add_element(self.get_vt_xml(vt))
 
-        responses.append(vts_xml)
+        yield xml_helper.create_element('vts', end=True)
+        yield xml_helper.create_response('get_vts', end=True)
 
-        return simple_response_str('get_vts', 200, 'OK', responses)
+        self.is_cache_available = True
 
     def handle_get_performance(self, scan_et):
         """ Handles <get_performance> command.
@@ -1029,9 +1109,8 @@ class OSPDaemon:
                 int(start)
             except ValueError:
                 raise OspdCommandError(
-                    'Start argument must be integer.',
-                    'get_performance'
-            )
+                    'Start argument must be integer.', 'get_performance'
+                )
             cmd.append(start)
 
         if end:
@@ -1039,8 +1118,7 @@ class OSPDaemon:
                 int(end)
             except ValueError:
                 raise OspdCommandError(
-                    'End argument must be integer.',
-                    'get_performance'
+                    'End argument must be integer.', 'get_performance'
                 )
             cmd.append(end)
 
@@ -1051,23 +1129,23 @@ class OSPDaemon:
                 cmd.append(titles)
             else:
                 raise OspdCommandError(
-                    'Arguments not allowed',
-                    'get_performance'
+                    'Arguments not allowed', 'get_performance'
                 )
 
         try:
             output = subprocess.check_output(cmd)
         except (
-                subprocess.CalledProcessError,
-                PermissionError,
-                FileNotFoundError,
+            subprocess.CalledProcessError,
+            PermissionError,
+            FileNotFoundError,
         ) as e:
             raise OspdCommandError(
-                'Bogus get_performance format. %s' % e,
-                'get_performance'
+                'Bogus get_performance format. %s' % e, 'get_performance'
             )
 
-        return simple_response_str('get_performance', 200, 'OK', output.decode())
+        return simple_response_str(
+            'get_performance', 200, 'OK', output.decode()
+        )
 
     def handle_help_command(self, scan_et):
         """ Handles <help> command.
@@ -1165,7 +1243,7 @@ class OSPDaemon:
         for result in self.scan_collection.results_iterator(scan_id, pop_res):
             results.append(get_result_xml(result))
 
-        logger.info('Returning %d results', len(results))
+        logger.debug('Returning %d results', len(results))
         return results
 
     def get_xml_str(self, data):
@@ -1424,16 +1502,19 @@ class OSPDaemon:
         """
         return ''
 
-    def get_vt_xml(self, vt_id):
+    def get_vt_iterator(self):
+        for vt_id, val in self.vts.items():
+            yield (vt_id, val)
+
+    def get_vt_xml(self, single_vt):
         """ Gets a single vulnerability test information in XML format.
 
         @return: String of single vulnerability test information in XML format.
         """
-        if not vt_id:
+        if not single_vt:
             return Element('vt')
 
-        vt = self.vts.get(vt_id)
-
+        vt_id, vt = single_vt
         name = vt.get('name')
         vt_xml = Element('vt')
         vt_xml.set('id', vt_id)
@@ -1520,35 +1601,6 @@ class OSPDaemon:
 
         return vt_xml
 
-    def get_vts_xml(self, vt_id=None, filtered_vts=None):
-        """ Gets collection of vulnerability test information in XML format.
-        If vt_id is specified, the collection will contain only this vt, if
-        found.
-        If no vt_id is specified, the collection will contain all vts or those
-        passed in filtered_vts.
-
-        Arguments:
-            vt_id (vt_id, optional): ID of the vt to get.
-            filtered_vts (dict, optional): Filtered VTs collection.
-
-        Return:
-            String of collection of vulnerability test information in
-            XML format.
-        """
-
-        vts_xml = Element('vts')
-
-        if vt_id:
-            vts_xml.append(self.get_vt_xml(vt_id))
-        elif filtered_vts:
-            for vt_id in filtered_vts:
-                vts_xml.append(self.get_vt_xml(vt_id))
-        else:
-            for vt_id in self.vts:
-                vts_xml.append(self.get_vt_xml(vt_id))
-
-        return vts_xml
-
     def handle_get_scanner_details(self):
         """ Handles <get_scanner_details> command.
 
@@ -1598,7 +1650,7 @@ class OSPDaemon:
 
         return simple_response_str('get_version', 200, 'OK', content)
 
-    def handle_command(self, command):
+    def handle_command(self, command, stream):
         """ Handles an osp command in a string.
 
         @return: OSP Response to command.
@@ -1613,23 +1665,26 @@ class OSPDaemon:
             raise OspdCommandError('Bogus command name')
 
         if tree.tag == "get_version":
-            return self.handle_get_version_command()
+            stream.write(self.handle_get_version_command())
         elif tree.tag == "start_scan":
-            return self.handle_start_scan_command(tree)
+            stream.write(self.handle_start_scan_command(tree))
         elif tree.tag == "stop_scan":
-            return self.handle_stop_scan_command(tree)
+            stream.write(self.handle_stop_scan_command(tree))
         elif tree.tag == "get_scans":
-            return self.handle_get_scans_command(tree)
+            stream.write(self.handle_get_scans_command(tree))
         elif tree.tag == "get_vts":
-            return self.handle_get_vts_command(tree)
+            response = self.handle_get_vts_command(tree)
+            for data in response:
+                stream.write(data)
+            return
         elif tree.tag == "delete_scan":
-            return self.handle_delete_scan_command(tree)
+            stream.write(self.handle_delete_scan_command(tree))
         elif tree.tag == "help":
-            return self.handle_help_command(tree)
+            stream.write(self.handle_help_command(tree))
         elif tree.tag == "get_scanner_details":
-            return self.handle_get_scanner_details()
+            stream.write(self.handle_get_scanner_details())
         elif tree.tag == "get_performance":
-            return self.handle_get_performance(tree)
+            stream.write(self.handle_get_performance(tree))
         else:
             assert False, "Unhandled command: {0}".format(tree.tag)
 
@@ -1647,6 +1702,7 @@ class OSPDaemon:
             while True:
                 time.sleep(10)
                 self.scheduler()
+                self.clean_forgotten_scans()
         except KeyboardInterrupt:
             logger.info("Received Ctrl-C shutting-down ...")
         finally:
@@ -1663,11 +1719,23 @@ class OSPDaemon:
         @target: Target to scan.
         @options: Miscellaneous scan options.
 
-        @return: New scan's ID.
+        @return: New scan's ID. None if the scan_id already exists and the
+                 scan status is RUNNING or FINISHED.
         """
-        if self.scan_exists(scan_id):
-            logger.info("Scan %s exists. Resuming scan.", scan_id)
+        status = None
+        scan_exists = self.scan_exists(scan_id)
+        if scan_id and scan_exists:
+            status = self.get_scan_status(scan_id)
 
+        if scan_exists and status == ScanStatus.STOPPED:
+            logger.info("Scan %s exists. Resuming scan.", scan_id)
+        elif scan_exists and (
+            status == ScanStatus.RUNNING or status == ScanStatus.FINISHED
+        ):
+            logger.info(
+                "Scan %s exists with status %s.", scan_id, status.name.lower()
+            )
+            return
         return self.scan_collection.create_scan(scan_id, targets, options, vts)
 
     def get_scan_options(self, scan_id):
@@ -1677,6 +1745,32 @@ class OSPDaemon:
     def set_scan_option(self, scan_id, name, value):
         """ Sets a scan's option to a provided value. """
         return self.scan_collection.set_option(scan_id, name, value)
+
+    def clean_forgotten_scans(self):
+        """ Check for old stopped or finished scans which have not been
+        deleted and delete them if the are older than the set value."""
+
+        if not self.scaninfo_store_time:
+            return
+
+        for scan_id in list(self.scan_collection.ids_iterator()):
+            end_time = int(self.get_scan_end_time(scan_id))
+            scan_status = self.get_scan_status(scan_id)
+
+            if (
+                scan_status == ScanStatus.STOPPED
+                or scan_status == ScanStatus.FINISHED
+            ) and end_time:
+                stored_time = int(time.time()) - end_time
+                if stored_time > self.scaninfo_store_time * 3600:
+                    logger.debug(
+                        'Scan %s is older than %d hours and seems have been '
+                        'forgotten. Scan info will be deleted from the '
+                        'scan table',
+                        scan_id,
+                        self.scaninfo_store_time,
+                    )
+                    self.delete_scan(scan_id)
 
     def check_scan_process(self, scan_id):
         """ Check the scan's process, and terminate the scan if not alive. """
@@ -1764,11 +1858,25 @@ class OSPDaemon:
         )
 
     def add_scan_error(
-        self, scan_id, host='', hostname='', name='', value='', port=''
+        self,
+        scan_id,
+        host='',
+        hostname='',
+        name='',
+        value='',
+        port='',
+        test_id='',
     ):
         """ Adds an error result to scan_id scan. """
         self.scan_collection.add_result(
-            scan_id, ResultType.ERROR, host, hostname, name, value, port
+            scan_id,
+            ResultType.ERROR,
+            host,
+            hostname,
+            name,
+            value,
+            port,
+            test_id,
         )
 
     def add_scan_host_detail(

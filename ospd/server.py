@@ -49,7 +49,9 @@ class Stream:
         try:
             self.socket.shutdown(socket.SHUT_RDWR)
         except OSError as e:
-            logger.debug("Ignoring error while shutting down the connection. %s", e)
+            logger.debug(
+                "Ignoring error while shutting down the connection. %s", e
+            )
 
         self.socket.close()
 
@@ -77,7 +79,6 @@ class Stream:
                     logger.error("Error sending data to the client. %s", e)
                 finally:
                     return
-
 
             try:
                 b_sent = self.socket.send(data[b_start:b_end])
@@ -202,9 +203,6 @@ class UnixSocketServer(BaseServer):
         self._cleanup_socket()
         self._create_parent_dirs()
 
-        if self.socket_path.exists():
-            os.chmod(str(self.socket_path), self.socket_mode)
-
         try:
             self.stream_callback = stream_callback
             self.server = ThreadedUnixSocketServer(self, str(self.socket_path))
@@ -216,6 +214,9 @@ class UnixSocketServer(BaseServer):
                     str(self.socket_path), e
                 )
             )
+
+        if self.socket_path.exists():
+            self.socket_path.chmod(self.socket_mode)
 
     def close(self):
         super().close()
