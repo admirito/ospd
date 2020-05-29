@@ -2,3 +2,6 @@ include:
   - project: other/kayna
     ref: master
     file: "/ci/1.0/debian_system.yml"
+
+variables:
+  DISTRIBUTION: focal
