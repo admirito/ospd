@@ -4,29 +4,107 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [2.0.1] (2020-05-12)
+## (20.8.2) - 2021-02-01
+
+### Added
+- Allow the scanner to update total count of hosts. [#332](https://github.com/greenbone/ospd/pull/332)
+- Add more debug logging. [#352](https://github.com/greenbone/ospd/pull/352)
+- Set end_time for interrupted scans. [#353](https://github.com/greenbone/ospd/pull/353)
+
+### Fixed
+- Fix OSP version. [#326](https://github.com/greenbone/ospd/pull/326)
+- Use empty string instead of None for credential. [#335](https://github.com/greenbone/ospd/pull/335)
+- Fix target_to_ipv4_short(). [#338](https://github.com/greenbone/ospd/pull/338)
+- Fix malformed target. [#341](https://github.com/greenbone/ospd/pull/341)
+- Initialize end_time with create_scan. [#354](https://github.com/greenbone/ospd/pull/354)
+- Fix get_count_total(). Accept -1 value set by the server. [#355](https://github.com/greenbone/ospd/pull/355)
+
+[20.8.2]: https://github.com/greenbone/ospd/compare/v20.8.1...ospd-20.08
+
+## [20.8.1] (2020-08-12)
+
+### Fixed
+- Fix deploy and upload to pypi. [#312](https://github.com/greenbone/ospd/pull/312)
+- Fix metadata for Python wheel distributable [#313](https://github.com/greenbone/ospd/pull/313)
+
+[20.8.1]: https://github.com/greenbone/ospd/compare/v20.8.0...v20.8.1
+
+## [20.8.0] (2020-08-11)
+
+### Added
+- Add solution method to solution of vt object. [#166](https://github.com/greenbone/ospd/pull/166)
+- Add wait_for_children(). [#167](https://github.com/greenbone/ospd/pull/167)
+- Extend osp to accept target options. [#194](https://github.com/greenbone/ospd/pull/194)
+- Accept reverse_lookup_only and reverse_lookup_unify target's options. [#195](https://github.com/greenbone/ospd/pull/195)
+- Add 'total' and 'sent' attributes to <vts> element for <get_vts> cmd response. [#206](https://github.com/greenbone/ospd/pull/206)
+- Add new get_memory_usage command. [#207](https://github.com/greenbone/ospd/pull/207)
+- Add lock-file-dir configuration option. [#218](https://github.com/greenbone/ospd/pull/218)
+- Add details attribute to get_vts command. [#222](https://github.com/greenbone/ospd/pull/222)
+- Add [pontos](https://github.com/greenbone/pontos) as dev dependency for
+  managing the version information in ospd [#254](https://github.com/greenbone/ospd/pull/254)
+- Add more info about scan progress with progress attribute in get_scans cmd. [#266](https://github.com/greenbone/ospd/pull/266)
+- Add support for scan queuing
+  [#278](https://github.com/greenbone/ospd/pull/278)
+  [#279](https://github.com/greenbone/ospd/pull/279)
+  [#281](https://github.com/greenbone/ospd/pull/281)
+- Extend results with optional argument URI [#282](https://github.com/greenbone/ospd/pull/282)
+- Add new scan status INTERRUPTED.
+  [#288](https://github.com/greenbone/ospd/pull/288)
+  [#289](https://github.com/greenbone/ospd/pull/289)
+- Extend get_vts with attribute version_only and return the version [#291](https://github.com/greenbone/ospd/pull/291)
+- Allow to set all openvas parameters which are not strict openvas only parameters via osp. [#301](https://github.com/greenbone/ospd/pull/301)
+
+### Changes
+- Modify __init__() method and use new syntax for super(). [#186](https://github.com/greenbone/ospd/pull/186)
+- Create data manager and spawn new process to keep the vts dictionary. [#191](https://github.com/greenbone/ospd/pull/191)
+- Update daemon start sequence. Run daemon.check before daemon.init now. [#197](https://github.com/greenbone/ospd/pull/197)
+- Improve get_vts cmd response, sending the vts piece by piece.[#201](https://github.com/greenbone/ospd/pull/201)
+- Start the server before initialize to respond to the client.[#209](https://github.com/greenbone/ospd/pull/209)
+- Use an iterator to get the vts when get_vts cmd is called. [#216](https://github.com/greenbone/ospd/pull/216)
+- Update license to AGPL-3.0+ [#241](https://github.com/greenbone/ospd/pull/241)
+- Replaced pipenv with poetry for dependency management. `poetry install` works
+  a bit different then `pipenv install`. It installs dev packages by default and
+  also ospd in editable mode. This means after running poetry install ospd will
+  directly be importable in the virtual python environment. [#252](https://github.com/greenbone/ospd/pull/252)
+- Progress bar calculation does not take in account the dead hosts. [#266](https://github.com/greenbone/ospd/pull/266)
+- Show progress as integer for get_scans. [#269](https://github.com/greenbone/ospd/pull/269)
+- Make scan_id attribute mandatory for get_scans. [#270](https://github.com/greenbone/ospd/pull/270)
+- Ignore subsequent SIGINT once inside exit_cleanup(). [#273](https://github.com/greenbone/ospd/pull/273)
+- Simplify start_scan() [#275](https://github.com/greenbone/ospd/pull/275)
+- Make ospd-openvas to shut down gracefully
+  [#302](https://github.com/greenbone/ospd/pull/302)
+  [#307](https://github.com/greenbone/ospd/pull/307)
+- Do not add all params which are in the OSPD_PARAMS dict to the params which are set as scan preferences. [#305](https://github.com/greenbone/ospd/pull/305)
+
+### Fixed
+- Fix stop scan. Wait for the scan process to be stopped before delete it from the process table. [#204](https://github.com/greenbone/ospd/pull/204)
+- Fix get_scanner_details(). [#210](https://github.com/greenbone/ospd/pull/210)
+- Fix thread lib leak using daemon mode for python 3.7. [#272](https://github.com/greenbone/ospd/pull/272)
+- Fix scan progress in which all hosts are dead or excluded. [#295](https://github.com/greenbone/ospd/pull/295)
+- Stop all running scans before exiting [#303](https://github.com/greenbone/ospd/pull/303)
+- Fix start of parallel queued task. [#304](https://github.com/greenbone/ospd/pull/304)
+- Strip trailing commas from the target list. [#306](https://github.com/greenbone/ospd/pull/306)
+
+### Removed
+- Remove support for resume task. [#266](https://github.com/greenbone/ospd/pull/266)
+
+[20.8.0]: https://github.com/greenbone/ospd/compare/ospd-2.0...ospd-20.08
+
+## [2.0.1]
 
 ### Added
 - Add clean_forgotten_scans(). [#171](https://github.com/greenbone/ospd/pull/171)
 - Extend OSP with finished_hosts to improve resume task.  [#177](https://github.com/greenbone/ospd/pull/177)
-- Add lock-file-dir configuration option. [#217](https://github.com/greenbone/ospd/pull/217)
-- Add initialized flag. [#256](https://github.com/greenbone/ospd/pull/256)
-- Set cache unavailable if ospd is serving a get_vts client request. [#257](https://github.com/greenbone/ospd/pull/257)
 
 ### Changed
 - Set loglevel to debug for some message. [#159](https://github.com/greenbone/ospd/pull/159)
 - Improve error handling when stop a scan. [#163](https://github.com/greenbone/ospd/pull/163)
 - Check the existence and status of an scan_id. [#179](https://github.com/greenbone/ospd/pull/179)
-- Send the VTs by chunk as response for get_vts. [#215](https://github.com/greenbone/ospd/pull/215)
 
 ### Fixed
 - Fix set permission in unix socket. [#157](https://github.com/greenbone/ospd/pull/157)
 - Fix VT filter.  [#165](https://github.com/greenbone/ospd/pull/165)
 - Remove from exclude_host list the hosts passed as finished too. [#183](https://github.com/greenbone/ospd/pull/183)
-- Fix xml parsing/encoding.
- [#223](https://github.com/greenbone/ospd/pull/223)
- [#226](https://github.com/greenbone/ospd/pull/226)
- [#228](https://github.com/greenbone/ospd/pull/228)
 
 [2.0.1]: https://github.com/greenbone/ospd/compare/v2.0.0...ospd-2.0
 
@@ -77,7 +155,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Set default unix socket path to /var/run/ospd/ospd.sock and default pid file path to /var/run/ospd.pid. [#140](https://github.com/greenbone/ospd/pull/140)
 - Do not add a host detail result with the host status. [#145](https://github.com/greenbone/ospd/pull/145)
 - Do not log the received command. [#151](https://github.com/greenbone/ospd/pull/151)
-- Send the VTs by chunk as response for get_vts. [#215](https://github.com/greenbone/ospd/pull/215)
 
 ### Fixed
 - Fix scan progress. [#47](https://github.com/greenbone/ospd/pull/47)
@@ -88,7 +165,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Improve error handling when sending data. [#147](https://github.com/greenbone/ospd/pull/147)
 - Fix classifier in setup.py. [#154](https://github.com/greenbone/ospd/pull/154)
 
-[2.0.0]: https://github.com/greenbone/ospd/compare/v1.3.2...v2.0.0
+[2.0]: https://github.com/greenbone/ospd/compare/ospd-1.3...master
 
 
 ## [1.3] (2018-06-05)
@@ -102,4 +179,3 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Changed
 - Support Python 3 only.
 - Documentation has been updated.
-

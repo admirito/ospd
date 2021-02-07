@@ -1,20 +1,19 @@
-# Copyright (C) 2015-2018 Greenbone Networks GmbH
+# Copyright (C) 2014-2021 Greenbone Networks GmbH
 #
-# SPDX-License-Identifier: GPL-2.0-or-later
+# SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or (at your option) any later version.
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# GNU Affero General Public License for more details.
 #
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+# You should have received a copy of the GNU Affero General Public License
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 """ OSP Daemon class for simple remote SSH-based command execution.
 """
@@ -27,6 +26,7 @@ from __future__ import absolute_import
 
 import socket
 
+from typing import Optional, Dict
 from ospd.ospd import OSPDaemon
 
 try:
@@ -61,7 +61,7 @@ SSH_SCANNER_PARAMS = {
         'mandatory': 0,
         'description': 'Timeout when communicating with the target via SSH.',
     },
-}
+}  # type: Dict
 
 # pylint: disable=abstract-method
 class OSPDaemonSimpleSSH(OSPDaemon):
@@ -78,15 +78,12 @@ class OSPDaemonSimpleSSH(OSPDaemon):
     an array.
     """
 
-    def __init__(self, certfile, keyfile, cafile, niceness=None):
-        """ Initializes the daemon and add parameters needed to remote SSH
-        execution. """
+    def __init__(self, **kwargs):
+        """Initializes the daemon and add parameters needed to remote SSH
+        execution."""
+        super().__init__(**kwargs)
 
-        super(OSPDaemonSimpleSSH, self).__init__(
-            certfile=certfile, keyfile=keyfile, cafile=cafile, niceness=niceness
-        )
-
-        self._niceness = niceness
+        self._niceness = kwargs.get('niceness', None)
 
         if paramiko is None:
             raise ImportError(
@@ -95,9 +92,9 @@ class OSPDaemonSimpleSSH(OSPDaemon):
             )
 
         for name, param in SSH_SCANNER_PARAMS.items():
-            self.add_scanner_param(name, param)
+            self.set_scanner_param(name, param)
 
-    def run_command(self, scan_id, host, cmd):
+    def run_command(self, scan_id: str, host: str, cmd: str) -> Optional[str]:
         """
         Run a single command via SSH and return the content of stdout or
         None in case of an Error. A scan error is issued in the latter
@@ -120,7 +117,7 @@ class OSPDaemonSimpleSSH(OSPDaemon):
         # First and second modes should be removed in future releases.
         # On the third case it receives the credentials as a subelement of
         # the <target>.
-        credentials = self.get_scan_credentials(scan_id, host)
+        credentials = self.get_scan_credentials(scan_id)
         if (
             'username_password' in options
             and ':' in options['username_password']

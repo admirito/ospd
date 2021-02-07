@@ -1,20 +1,19 @@
-# Copyright (C) 2014-2018 Greenbone Networks GmbH
+# Copyright (C) 2014-2021 Greenbone Networks GmbH
 #
-# SPDX-License-Identifier: GPL-2.0-or-later
+# SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or (at your option) any later version.
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# GNU Affero General Public License for more details.
 #
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+# You should have received a copy of the GNU Affero General Public License
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 """ Test suites for Target manipulations.
 """
@@ -41,13 +40,36 @@ class ConvertTargetListsTestCase(unittest.TestCase):
         for i in range(1, 255):
             self.assertIn('195.70.81.%d' % i, addresses)
 
+    def test_bad_ipv4_cidr(self):
+        addresses = target_str_to_list('195.70.81.0/32')
+        self.assertIsNotNone(addresses)
+        self.assertEqual(len(addresses), 0)
+
+        addresses = target_str_to_list('195.70.81.0/31')
+        self.assertIsNotNone(addresses)
+        self.assertEqual(len(addresses), 0)
+
+    def test_good_ipv4_cidr(self):
+        addresses = target_str_to_list('195.70.81.0/30')
+        self.assertIsNotNone(addresses)
+        self.assertEqual(len(addresses), 2)
+
     def test_range(self):
-        addresses = target_str_to_list('195.70.81.1-10')
+        addresses = target_str_to_list('195.70.81.0-10')
 
         self.assertIsNotNone(addresses)
-        self.assertEqual(len(addresses), 10)
+        self.assertEqual(len(addresses), 11)
 
-        for i in range(1, 10):
+        for i in range(0, 10):
+            self.assertIn('195.70.81.%d' % i, addresses)
+
+    def test_target_str_with_trailing_comma(self):
+        addresses = target_str_to_list(',195.70.81.1,195.70.81.2,')
+
+        self.assertIsNotNone(addresses)
+        self.assertEqual(len(addresses), 2)
+
+        for i in range(1, 2):
             self.assertIn('195.70.81.%d' % i, addresses)
 
     def test_get_hostname_by_address(self):

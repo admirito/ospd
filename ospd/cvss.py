@@ -1,24 +1,24 @@
-# Copyright (C) 2014-2018 Greenbone Networks GmbH
+# Copyright (C) 2014-2021 Greenbone Networks GmbH
 #
-# SPDX-License-Identifier: GPL-2.0-or-later
+# SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or (at your option) any later version.
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# GNU Affero General Public License for more details.
 #
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+# You should have received a copy of the GNU Affero General Public License
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 """ Common Vulnerability Scoring System handling class. """
 
 import math
+from typing import List, Dict, Optional
 
 CVSS_V2_METRICS = {
     'AV': {'L': 0.395, 'A': 0.646, 'N': 1.0},
@@ -27,7 +27,7 @@ CVSS_V2_METRICS = {
     'C': {'N': 0.0, 'P': 0.275, 'C': 0.660},
     'I': {'N': 0.0, 'P': 0.275, 'C': 0.660},
     'A': {'N': 0.0, 'P': 0.275, 'C': 0.660},
-}
+}  # type: Dict
 
 CVSS_V3_METRICS = {
     'AV': {'N': 0.85, 'A': 0.62, 'L': 0.55, 'P': 0.2},
@@ -39,19 +39,19 @@ CVSS_V3_METRICS = {
     'C': {'H': 0.56, 'L': 0.22, 'N': 0},
     'I': {'H': 0.56, 'L': 0.22, 'N': 0},
     'A': {'H': 0.56, 'L': 0.22, 'N': 0},
-}
+}  # type: Dict
 
 
 class CVSS(object):
     """ Handle cvss vectors and calculate the cvss scoring"""
 
     @staticmethod
-    def roundup(value):
+    def roundup(value: float) -> float:
         """It rounds up to 1 decimal. """
         return math.ceil(value * 10) / 10
 
     @staticmethod
-    def _parse_cvss_base_vector(cvss_vector):
+    def _parse_cvss_base_vector(cvss_vector: str) -> List:
         """Parse a string containing a cvss base vector.
 
         Arguments:
@@ -63,8 +63,8 @@ class CVSS(object):
         return [item.split(':')[1] for item in vector_as_list]
 
     @classmethod
-    def cvss_base_v2_value(cls, cvss_base_vector):
-        """ Calculate the cvss base score from a cvss base vector
+    def cvss_base_v2_value(cls, cvss_base_vector: str) -> Optional[float]:
+        """Calculate the cvss base score from a cvss base vector
         for cvss version 2.
         Arguments:
             cvss_base_vector (str) Cvss base vector v2.
@@ -99,8 +99,8 @@ class CVSS(object):
         return round(cvss_base, 1)
 
     @classmethod
-    def cvss_base_v3_value(cls, cvss_base_vector):
-        """ Calculate the cvss base score from a cvss base vector
+    def cvss_base_v3_value(cls, cvss_base_vector: str) -> Optional[float]:
+        """Calculate the cvss base score from a cvss base vector
         for cvss version 3.
         Arguments:
             cvss_base_vector (str) Cvss base vector v3.

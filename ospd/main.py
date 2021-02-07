@@ -1,24 +1,21 @@
-# Copyright (C) 2019 Greenbone Networks GmbH
+# Copyright (C) 2014-2021 Greenbone Networks GmbH
 #
-# SPDX-License-Identifier: GPL-2.0-or-later
+# SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or (at your option) any later version.
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# GNU Affero General Public License for more details.
 #
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+# You should have received a copy of the GNU Affero General Public License
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 import logging
-
-from logging.handlers import SysLogHandler, WatchedFileHandler
 
 import os
 import sys
@@ -28,17 +25,21 @@ import signal
 from functools import partial
 
 from typing import Type, Optional
+from pathlib import Path
 
-from ospd.errors import OspdError
-from ospd.misc import go_to_background, create_pid, remove_pidfile
+from ospd.misc import go_to_background, create_pid
 from ospd.ospd import OSPDaemon
 from ospd.parser import create_parser, ParserType
-from ospd.server import TlsServer, UnixSocketServer
+from ospd.server import TlsServer, UnixSocketServer, BaseServer
+from ospd.logger import init_logging
 
-COPYRIGHT = """Copyright (C) 2014, 2015, 2018, 2019 Greenbone Networks GmbH
+
+COPYRIGHT = """Copyright (C) 2014-2021 Greenbone Networks GmbH
 License GPLv2+: GNU GPL version 2 or later
 This is free software: you are free to change and redistribute it.
 There is NO WARRANTY, to the extent permitted by law."""
+
+LOGGER = logging.getLogger(__name__)
 
 
 def print_version(daemon: OSPDaemon, file=sys.stdout):
@@ -60,49 +61,29 @@ def print_version(daemon: OSPDaemon, file=sys.stdout):
     print(COPYRIGHT, file=file)
 
 
-def init_logging(
-    name: str,
-    log_level: int,
-    *,
-    log_file: Optional[str] = None,
-    foreground: Optional[bool] = False
-):
+def exit_cleanup(
+    pidfile: str,
+    server: BaseServer,
+    daemon: OSPDaemon,
+    _signum=None,
+    _frame=None,
+) -> None:
+    """ Removes the pidfile before ending the daemon. """
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    pidpath = Path(pidfile)
 
-    rootlogger = logging.getLogger()
-    rootlogger.setLevel(log_level)
+    if not pidpath.is_file():
+        return
 
-    if foreground:
-        console = logging.StreamHandler()
-        console.setFormatter(
-            logging.Formatter(
-                '%(asctime)s {}: %(levelname)s: (%(name)s) %(message)s'.format(
-                    name
-                )
-            )
-        )
-        rootlogger.addHandler(console)
-    elif log_file:
-        logfile = WatchedFileHandler(log_file)
-        logfile.setFormatter(
-            logging.Formatter(
-                '%(asctime)s {}: %(levelname)s: (%(name)s) %(message)s'.format(
-                    name
-                )
-            )
-        )
-        rootlogger.addHandler(logfile)
-    else:
-        syslog = SysLogHandler('/dev/log')
-        syslog.setFormatter(
-            logging.Formatter(
-                '{}: %(levelname)s: (%(name)s) %(message)s'.format(name)
-            )
-        )
-        rootlogger.addHandler(syslog)
-        # Duplicate syslog's file descriptor to stout/stderr.
-        syslog_fd = syslog.socket.fileno()
-        os.dup2(syslog_fd, 1)
-        os.dup2(syslog_fd, 2)
+    with pidpath.open() as f:
+        if int(f.read()) == os.getpid():
+            LOGGER.debug("Performing exit clean up")
+            daemon.daemon_exit_cleanup()
+            LOGGER.info("Shutting-down server ...")
+            server.close()
+            LOGGER.debug("Finishing daemon process")
+            pidpath.unlink()
+            sys.exit()
 
 
 def main(
@@ -120,12 +101,17 @@ def main(
         args.foreground = True
 
     init_logging(
-        name, args.log_level, log_file=args.log_file, foreground=args.foreground
+        args.log_level,
+        log_file=args.log_file,
+        log_config=args.log_config,
+        foreground=args.foreground,
     )
 
     if args.port == 0:
         server = UnixSocketServer(
-            args.unix_socket, args.socket_mode, args.stream_timeout,
+            args.unix_socket,
+            args.socket_mode,
+            args.stream_timeout,
         )
     else:
         server = TlsServer(
@@ -143,6 +129,10 @@ def main(
         print_version(daemon)
         sys.exit()
 
+    if args.list_commands:
+        print(daemon.get_help_text())
+        sys.exit()
+
     if not args.foreground:
         go_to_background()
 
@@ -150,18 +140,25 @@ def main(
         sys.exit()
 
     # Set signal handler and cleanup
-    atexit.register(remove_pidfile, pidfile=args.pid_file)
-    signal.signal(signal.SIGTERM, partial(remove_pidfile, args.pid_file))
+    atexit.register(
+        exit_cleanup, pidfile=args.pid_file, server=server, daemon=daemon
+    )
+    signal.signal(
+        signal.SIGTERM, partial(exit_cleanup, args.pid_file, server, daemon)
+    )
+    signal.signal(
+        signal.SIGINT, partial(exit_cleanup, args.pid_file, server, daemon)
+    )
+    if not daemon.check():
+        return 1
 
-    try:
-        daemon.init()
+    LOGGER.info(
+        "Starting %s version %s.",
+        daemon.daemon_info['name'],
+        daemon.daemon_info['version'],
+    )
 
-        if not daemon.check():
-            return 1
-
-        daemon.run(server)
-    except OspdError as e:
-        print('ERROR: {}'.format(e), file=sys.stderr)
-        sys.exit(1)
+    daemon.init(server)
+    daemon.run()
 
     return 0

@@ -1,25 +1,23 @@
-# Copyright (C) 2014-2018 Greenbone Networks GmbH
+# Copyright (C) 2014-2021 Greenbone Networks GmbH
 #
-# SPDX-License-Identifier: GPL-2.0-or-later
+# SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or (at your option) any later version.
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# GNU Affero General Public License for more details.
 #
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+# You should have received a copy of the GNU Affero General Public License
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 """ Test module for command line arguments.
 """
 
-import logging
 import unittest
 
 from unittest.mock import patch
@@ -71,11 +69,11 @@ class ArgumentParserTestCase(unittest.TestCase):
 
     def test_correct_lower_case_log_level(self):
         args = self.parse_args('-L error'.split())
-        self.assertEqual(logging.ERROR, args.log_level)
+        self.assertEqual('ERROR', args.log_level)
 
     def test_correct_upper_case_log_level(self):
         args = self.parse_args('-L INFO'.split())
-        self.assertEqual(logging.INFO, args.log_level)
+        self.assertEqual('INFO', args.log_level)
 
     @patch('sys.stderr', new_callable=StringIO)
     def test_correct_log_level(self, _mock_stderr):
@@ -95,7 +93,7 @@ class ArgumentParserTestCase(unittest.TestCase):
 
         self.assertEqual(args.key_file, DEFAULT_KEY_FILE)
         self.assertEqual(args.niceness, DEFAULT_NICENESS)
-        self.assertEqual(args.log_level, logging.WARNING)
+        self.assertEqual(args.log_level, 'INFO')
         self.assertEqual(args.address, DEFAULT_ADDRESS)
         self.assertEqual(args.port, DEFAULT_PORT)
         self.assertEqual(args.scaninfo_store_time, DEFAULT_SCANINFO_STORE_TIME)

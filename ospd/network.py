@@ -1,20 +1,19 @@
-# Copyright (C) 2019 Greenbone Networks GmbH
+# Copyright (C) 2014-2021 Greenbone Networks GmbH
 #
-# SPDX-License-Identifier: GPL-2.0-or-later
+# SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or (at your option) any later version.
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# GNU Affero General Public License for more details.
 #
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+# You should have received a copy of the GNU Affero General Public License
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 """ Helper module for network related functions
 """
@@ -79,7 +78,19 @@ def target_to_ipv4_short(target: str) -> Optional[List]:
     except (socket.error, ValueError):
         return None
 
-    start_value = int(binascii.hexlify(bytes(start_packed[3])), 16)
+    # For subnet with mask lower than /24, ip addresses ending in .0 are
+    # allowed.
+    # The next code checks for a range starting with a A.B.C.0.
+    # For the octet equal to 0, bytes() returns an empty binary b'',
+    # which must be handle in a special way.
+    _start_value = bytes(start_packed[3])
+    if _start_value:
+        start_value = int(binascii.hexlify(_start_value), 16)
+    elif _start_value == b'':
+        start_value = 0
+    else:
+        return None
+
     if end_value < 0 or end_value > 255 or end_value < start_value:
         return None
 
@@ -274,14 +285,18 @@ def target_to_list(target: str) -> Optional[List]:
 
 
 def target_str_to_list(target_str: str) -> Optional[List]:
-    """ Parses a targets string into a list of individual targets. """
+    """Parses a targets string into a list of individual targets.
+    Return a list of hosts, None if supplied target_str is None or
+    empty, or an empty list in case of malformed target.
+    """
     new_list = list()
 
     if not target_str:
         return None
 
-    for target in target_str.split(','):
+    target_str = target_str.strip(',')
 
+    for target in target_str.split(','):
         target = target.strip()
         target_list = target_to_list(target)
 
@@ -289,7 +304,7 @@ def target_str_to_list(target_str: str) -> Optional[List]:
             new_list.extend(target_list)
         else:
             __LOGGER.info("%s: Invalid target value", target)
-            return None
+            return []
 
     return list(collections.OrderedDict.fromkeys(new_list))
 
@@ -364,7 +379,7 @@ def port_range_expand(portrange: str) -> Optional[List]:
 
 
 def port_str_arrange(ports: str) -> str:
-    """ Gives a str in the format (always tcp listed first).
+    """Gives a str in the format (always tcp listed first).
     T:<tcp ports/portrange comma separated>U:<udp ports comma separated>
     """
     b_tcp = ports.find("T")
@@ -471,7 +486,7 @@ def get_udp_port_list(port_str: str) -> Optional[List]:
     return ports_as_list(port_str)[1]
 
 
-def port_list_compress(port_list: str) -> str:
+def port_list_compress(port_list: List) -> str:
     """ Compress a port list and return a string. """
 
     if not port_list or len(port_list) == 0:
