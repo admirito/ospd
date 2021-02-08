@@ -9,9 +9,12 @@ override_dh_auto_clean:
 	rm -f doc/osp.html
 	dh_auto_clean
 
+override_dh_auto_test:
+
 override_dh_installdocs:
 #	# "xsltproc" is the dependency to run ./generate
 	(cd doc; ./generate)
+	dh_installdocs -ppython3-ospd-doc --doc-main-package=python3-ospd-doc
 	dh_installdocs
 
 %:
