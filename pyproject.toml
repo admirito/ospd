@@ -3,7 +3,7 @@ requires = ["setuptools", "wheel"]
 
 [tool.poetry]
 name = "ospd"
-version = "20.8.2"
+version = "21.4.3"
 description = "OSPD is a base for scanner wrappers which share the same communication protocol: OSP (Open Scanner Protocol)"
 authors = ["Greenbone Networks GmbH <info@greenbone.net>"]
 license = "AGPL-3.0-or-later"
@@ -16,8 +16,6 @@ classifiers = [
   "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
   "Intended Audience :: Developers",
   "Intended Audience :: System Administrators",
-  "Programming Language :: Python :: 3.5",
-  "Programming Language :: Python :: 3.6",
   "Programming Language :: Python :: 3.7",
   "Programming Language :: Python :: 3.8",
 ]
@@ -38,24 +36,25 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.5"
-psutil = "^5.7.0"
-lxml = "^4.5.1"
-defusedxml = "^0.6.0"
+python = "^3.7"
+psutil = "^5.7.2"
+lxml = "^4.5.2"
+defusedxml = ">=0.6,<0.8"
 paramiko = "^2.7.1"
 deprecated = "^1.2.10"
 
 [tool.poetry.dev-dependencies]
-pylint = "^2.6.0"
+pylint = "^2.7.2"
 autohooks-plugin-pylint = "^1.2.0"
-autohooks-plugin-black = {version = "^1.2.0", python = "^3.6"}
-black = {version = "20.8b1", python = "^3.6"}
-rope = "^0.17.0"
-pontos = "^0.2.0"
+
+autohooks-plugin-black = {version = "^1.2.0", python = "^3.7"}
+black = {version = "20.8b1", python = "^3.7"}
+rope = "^0.18.0"
+pontos = "^21.6.7"
 
 [tool.black]
 line-length = 80
-target-version = ['py35', 'py36', 'py37', 'py38']
+target-version = ['py37', 'py38']
 skip-string-normalization = true
 exclude = '''
 /(

@@ -162,21 +162,21 @@ class GetVersion(BaseCommand):
 
 
 GVMCG_TITLES = [
-    'cpu-*',
+    'cpu-.*',
     'proc',
     'mem',
     'swap',
     'load',
-    'df-*',
+    'df-.*',
     'disk-sd[a-z][0-9]-rw',
     'disk-sd[a-z][0-9]-load',
     'disk-sd[a-z][0-9]-io-load',
-    'interface-eth*-traffic',
-    'interface-eth*-err-rate',
-    'interface-eth*-err',
-    'sensors-*_temperature-*',
-    'sensors-*_fanspeed-*',
-    'sensors-*_voltage-*',
+    'interface-eth.*-traffic',
+    'interface-eth.*-err-rate',
+    'interface-eth.*-err',
+    'sensors-.*_temperature-.*',
+    'sensors-.*_fanspeed-.*',
+    'sensors-.*_voltage-.*',
     'titles',
 ]  # type: List[str]
 
@@ -347,7 +347,7 @@ class GetVts(BaseCommand):
                 )
             except OspdCommandError as filter_error:
                 self._daemon.vts.is_cache_available = True
-                raise OspdCommandError(filter_error) from filter_error
+                raise filter_error
 
         if not version_only:
             vts_selection = self._daemon.get_vts_selection_list(

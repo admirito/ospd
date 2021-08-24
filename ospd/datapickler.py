@@ -67,7 +67,7 @@ class DataPickler:
             # create parent directories recursively
             parent_dir = storage_file_path.parent
             parent_dir.mkdir(parents=True, exist_ok=True)
-        except Exception as e:  # pylint: disable=broad-except
+        except Exception as e:
             raise OspdCommandError(
                 'Not possible to access dir for %s. %s' % (filename, e),
                 'start_scan',

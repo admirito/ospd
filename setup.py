@@ -70,11 +70,12 @@ setup(
         'License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)',  # pylint: disable=line-too-long
         # Specify the Python versions you support here. In particular, ensure
         # that you indicate whether you support Python 2, Python 3 or both.
-        'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
     ],
     # What does your project relate to?
     keywords=['Greenbone Vulnerability Manager OSP'],
-    python_requires='>=3.5',
+    python_requires='>=3.7',
     # List run-time dependencies here. These will be installed by pip when your
     # project is installed. For an analysis of "install_requires" vs pip's
     # requirements files see:
@@ -82,7 +83,7 @@ setup(
     install_requires=['paramiko', 'defusedxml', 'lxml', 'deprecated', 'psutil'],
     # You can just specify the packages manually here if your project is
     # simple. Or you can use find_packages().
-    packages=find_packages(exclude=['tests']),
+    packages=find_packages(exclude=['tests*']),
     # If there are data files included in your packages that need to be
     # installed, specify them here.
     include_package_data=True,

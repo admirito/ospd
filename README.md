@@ -4,9 +4,9 @@
 
 [![GitHub releases](https://img.shields.io/github/release/greenbone/ospd.svg)](https://github.com/greenbone/ospd/releases)
 [![PyPI](https://img.shields.io/pypi/v/ospd.svg)](https://pypi.org/project/ospd/)
-[![Scrutinizer Code Quality](https://scrutinizer-ci.com/g/greenbone/ospd/badges/quality-score.png?b=ospd-20.08)](https://scrutinizer-ci.com/g/greenbone/ospd/?branch=ospd-20.08)
-[![code test coverage](https://codecov.io/gh/greenbone/ospd/branch/ospd-20.08/graphs/badge.svg)](https://codecov.io/gh/greenbone/ospd)
-[![CircleCI](https://circleci.com/gh/greenbone/ospd/tree/ospd-20.08.svg?style=svg)](https://circleci.com/gh/greenbone/ospd/tree/ospd-20.08)
+[![Scrutinizer Code Quality](https://scrutinizer-ci.com/g/greenbone/ospd/badges/quality-score.png?b=ospd-21.04)](https://scrutinizer-ci.com/g/greenbone/ospd/?branch=ospd-21.04)
+[![code test coverage](https://codecov.io/gh/greenbone/ospd/branch/ospd-21.04/graphs/badge.svg)](https://codecov.io/gh/greenbone/ospd)
+[![CircleCI](https://circleci.com/gh/greenbone/ospd/tree/ospd-21.04.svg?style=svg)](https://circleci.com/gh/greenbone/ospd/tree/ospd-21.04)
 
 ospd is a base class for scanner wrappers which share the same communication
 protocol: OSP (Open Scanner Protocol). OSP creates a unified interface for
@@ -44,7 +44,7 @@ and the fingerprint is `8AE4 BE42 9B60 A59B 311C  2E73 9823 FAA6 0ED1 E580`.
 
 ### Requirements
 
-ospd requires Python >= 3.5 along with the following libraries:
+ospd requires Python >= 3.7 along with the following libraries:
 
     - python3-paramiko
 

@@ -88,7 +88,6 @@ class VtsTestCase(TestCase):
         it = iter(vts)
 
         vt_id = next(it)
-        # Python 3.5 doesn't ensure the order of the returned keys
         self.assertIn(vt_id, ['id_1', 'id_2'])
 
         vt_id = next(it)
@@ -103,9 +102,7 @@ class VtsTestCase(TestCase):
         vts.add('id_1', name='foo')
         vts.add('id_2', name='bar')
 
-        # use assertCountEqual for Python 3.5 because dict.keys order is
-        # undefined
-        self.assertCountEqual(vts.keys(), ['id_1', 'id_2'])
+        self.assertEqual(vts.keys(), ['id_1', 'id_2'])
 
     def test_getitem(self):
         vts = Vts()
@@ -148,16 +145,8 @@ class VtsTestCase(TestCase):
             name='foo',
             vt_modification_time='01234',
             vt_params={
-                '0': {
-                    'id': '0',
-                    'name': 'timeout',
-                    'default': '20',
-                },
-                '1': {
-                    'id': '1',
-                    'name': 'foo_pref:',
-                    'default': 'bar_value',
-                },
+                '0': {'id': '0', 'name': 'timeout', 'default': '20'},
+                '1': {'id': '1', 'name': 'foo_pref:', 'default': 'bar_value'},
             },
         )
         vts.add('id_2', name='bar', vt_modification_time='56789')
@@ -180,16 +169,8 @@ class VtsTestCase(TestCase):
             name='foo',
             vt_modification_time='01234',
             vt_params={
-                '0': {
-                    'id': '0',
-                    'name': 'timeout',
-                    'default': '20',
-                },
-                '1': {
-                    'id': '1',
-                    'name': 'foo_pref:',
-                    'default': 'bar_value',
-                },
+                '0': {'id': '0', 'name': 'timeout', 'default': '20'},
+                '1': {'id': '1', 'name': 'foo_pref:', 'default': 'bar_value'},
             },
         )
         vts.add('id_2', name='bar', vt_modification_time='56789')

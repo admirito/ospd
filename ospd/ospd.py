@@ -28,46 +28,32 @@ import time
 import os
 
 from pprint import pformat
-from typing import (
-    List,
-    Any,
-    Iterator,
-    Dict,
-    Optional,
-    Iterable,
-    Tuple,
-    Union,
-)
+from typing import List, Any, Iterator, Dict, Optional, Iterable, Tuple, Union
 from xml.etree.ElementTree import Element, SubElement
 
 import defusedxml.ElementTree as secET
 
 import psutil
 
-from deprecated import deprecated
-
 from ospd import __version__
 from ospd.command import get_commands
 from ospd.errors import OspdCommandError
 from ospd.misc import ResultType, create_process
 from ospd.network import resolve_hostname, target_str_to_list
-from ospd.protocol import OspRequest, OspResponse, RequestParser
+from ospd.protocol import RequestParser
 from ospd.scan import ScanCollection, ScanStatus, ScanProgress
 from ospd.server import BaseServer, Stream
 from ospd.vtfilter import VtsFilter
 from ospd.vts import Vts
-from ospd.xml import (
-    elements_as_text,
-    get_result_xml,
-    get_progress_xml,
-    get_elements_from_dict,
-)
+from ospd.xml import elements_as_text, get_result_xml, get_progress_xml
 
 logger = logging.getLogger(__name__)
 
 PROTOCOL_VERSION = __version__
 
 SCHEDULER_CHECK_PERIOD = 10  # in seconds
+
+MIN_TIME_BETWEEN_START_SCAN = 60  # in seconds
 
 BASE_SCANNER_PARAMS = {
     'debug_mode': {
@@ -119,7 +105,7 @@ class OSPDaemon:
         min_free_mem_scan_queue=0,
         file_storage_dir='/var/run/ospd',
         max_queued_scans=0,
-        **kwargs
+        **kwargs,
     ):  # pylint: disable=unused-argument
         """ Initializes the daemon's internal data. """
         self.scan_collection = ScanCollection(file_storage_dir)
@@ -142,6 +128,7 @@ class OSPDaemon:
         self.max_scans = max_scans
         self.min_free_mem_scan_queue = min_free_mem_scan_queue
         self.max_queued_scans = max_queued_scans
+        self.last_scan_start_time = 0
 
         self.scaninfo_store_time = kwargs.get('scaninfo_store_time')
 
@@ -180,11 +167,6 @@ class OSPDaemon:
         if self.command_exists(name):
             command = self.commands.get(name)
             command.attributes = attributes
-
-    @deprecated(version="20.8", reason="Use set_scanner_param instead")
-    def add_scanner_param(self, name: str, scanner_params: Dict) -> None:
-        """ Set a scanner parameter. """
-        self.set_scanner_param(name, scanner_params)
 
     def set_scanner_param(self, name: str, scanner_params: Dict) -> None:
         """ Set a scanner parameter. """
@@ -335,30 +317,6 @@ class OSPDaemon:
         """This method is to be overridden by the child classes if necessary"""
         return params
 
-    @staticmethod
-    @deprecated(
-        version="20.8",
-        reason="Please use OspRequest.process_vt_params instead.",
-    )
-    def process_vts_params(scanner_vts) -> Dict:
-        return OspRequest.process_vts_params(scanner_vts)
-
-    @staticmethod
-    @deprecated(
-        version="20.8",
-        reason="Please use OspRequest.process_credential_elements instead.",
-    )
-    def process_credentials_elements(cred_tree) -> Dict:
-        return OspRequest.process_credentials_elements(cred_tree)
-
-    @staticmethod
-    @deprecated(
-        version="20.8",
-        reason="Please use OspRequest.process_targets_elements instead.",
-    )
-    def process_targets_element(scanner_target) -> List:
-        return OspRequest.process_target_element(scanner_target)
-
     def stop_scan(self, scan_id: str) -> None:
         if (
             scan_id in self.scan_collection.ids_iterator()
@@ -386,8 +344,6 @@ class OSPDaemon:
             '%s: Stopping Scan with the PID %s.', scan_id, scan_process.ident
         )
 
-        self.stop_scan_cleanup(scan_id)
-
         try:
             scan_process.terminate()
         except AttributeError:
@@ -409,16 +365,6 @@ class OSPDaemon:
             scan_process.join(0)
 
         logger.info('%s: Scan stopped.', scan_id)
-
-    @staticmethod
-    def stop_scan_cleanup(scan_id: str):
-        """Should be implemented by subclass in case of a clean up before
-        terminating is needed."""
-
-    @staticmethod
-    def target_is_finished(scan_id: str):
-        """Should be implemented by subclass in case of a check before
-        stopping is needed."""
 
     def exec_scan(self, scan_id: str):
         """ Asserts to False. Should be implemented by subclass. """
@@ -502,14 +448,6 @@ class OSPDaemon:
         if not entry:
             return None
         return entry.get('default')
-
-    @deprecated(
-        version="20.8",
-        reason="Please use OspResponse.create_scanner_params_xml instead.",
-    )
-    def get_scanner_params_xml(self):
-        """ Returns the OSP Daemon's scanner params in xml format. """
-        return OspResponse.create_scanner_params_xml(self.scanner_params)
 
     def handle_client_stream(self, stream: Stream) -> None:
         """ Handles stream of data received from client. """
@@ -595,7 +533,7 @@ class OSPDaemon:
             self.finish_scan(scan_id)
         elif not is_stopped:
             logger.info(
-                "%s: Host scan finished. Progress: %d, Status: %s",
+                "%s: Host scan got interrupted. Progress: %d, Status: %s",
                 scan_id,
                 progress,
                 status.name,
@@ -632,9 +570,7 @@ class OSPDaemon:
         )
 
     def sort_host_finished(
-        self,
-        scan_id: str,
-        finished_hosts: Union[List[str], str],
+        self, scan_id: str, finished_hosts: Union[List[str], str]
     ) -> None:
         """Check if the finished host in the list was alive or dead
         and update the corresponding alive_count or dead_count."""
@@ -651,8 +587,16 @@ class OSPDaemon:
             progress = current_hosts.get(finished_host)
             if progress == ScanProgress.FINISHED:
                 alive_hosts.append(finished_host)
-            if progress == ScanProgress.DEAD_HOST:
+            elif progress == ScanProgress.DEAD_HOST:
                 dead_hosts.append(finished_host)
+            else:
+                logger.debug(
+                    'The host %s is considered dead or finished, but '
+                    'its progress is still %d. This can lead to '
+                    'interrupted scan.',
+                    finished_host,
+                    progress,
+                )
 
         self.scan_collection.set_host_dead(scan_id, dead_hosts)
 
@@ -665,6 +609,10 @@ class OSPDaemon:
     def set_scan_progress(self, scan_id: str):
         """Calculate the target progress with the current host states
         and stores in the scan table."""
+        # Get current scan progress for debugging purposes
+        logger.debug("Calculating scan progress with the following data:")
+        self._get_scan_progress_raw(scan_id)
+
         scan_progress = self.scan_collection.calculate_target_progress(scan_id)
         self.scan_collection.set_progress(scan_id, scan_progress)
 
@@ -675,10 +623,7 @@ class OSPDaemon:
         self.set_scan_progress(scan_id)
 
     def set_scan_host_progress(
-        self,
-        scan_id: str,
-        host: str = None,
-        progress: int = None,
+        self, scan_id: str, host: str = None, progress: int = None
     ) -> None:
         """Sets host's progress which is part of target.
         Each time a host progress is updated, the scan progress
@@ -695,6 +640,13 @@ class OSPDaemon:
 
         host_progress = {host: progress}
         self.set_scan_progress_batch(scan_id, host_progress)
+
+    def get_scan_host_progress(self, scan_id: str, host: str = None) -> int:
+        """ Get host's progress which is part of target."""
+        current_progress = self.scan_collection.get_current_target_progress(
+            scan_id
+        )
+        return current_progress.get(host)
 
     def set_scan_status(self, scan_id: str, status: ScanStatus) -> None:
         """ Set the scan's status."""
@@ -735,21 +687,12 @@ class OSPDaemon:
 
             if elements:
                 command_txt = ''.join(
-                    [
-                        command_txt,
-                        "\t Elements:\n",
-                        elements_as_text(elements),
-                    ]
+                    [command_txt, "\t Elements:\n", elements_as_text(elements)]
                 )
 
             txt += command_txt
 
         return txt
-
-    @deprecated(version="20.8", reason="Use ospd.xml.elements_as_text instead.")
-    def elements_as_text(self, elems: Dict, indent: int = 2) -> str:
-        """ Returns the elems dictionary as formatted plain text. """
-        return elements_as_text(elems, indent)
 
     def delete_scan(self, scan_id: str) -> int:
         """Deletes scan_id scan from collection.
@@ -806,15 +749,13 @@ class OSPDaemon:
         )
         current_progress[
             'count_excluded'
-        ] = self.scan_collection.simplify_exclude_host_count(scan_id)
+        ] = self.scan_collection.get_simplified_exclude_host_count(scan_id)
         current_progress['count_total'] = self.scan_collection.get_count_total(
             scan_id
         )
 
         logging.debug(
-            "%s: Current progress: \n%s",
-            scan_id,
-            pformat(current_progress),
+            "%s: Current progress: \n%s", scan_id, pformat(current_progress)
         )
         return current_progress
 
@@ -826,21 +767,6 @@ class OSPDaemon:
         """
         current_progress = self._get_scan_progress_raw(scan_id)
         return get_progress_xml(current_progress)
-
-    @deprecated(
-        version="20.8",
-        reason="Please use ospd.xml.get_elements_from_dict instead.",
-    )
-    def get_xml_str(self, data: Dict) -> List:
-        """Creates a string in XML Format using the provided data structure.
-
-        Arguments:
-            data: Dictionary of xml tags and their elements.
-
-        Returns:
-            String of data in xml format.
-        """
-        return get_elements_from_dict(data)
 
     def get_scan_xml(
         self,
@@ -1260,9 +1186,9 @@ class OSPDaemon:
         """Handles an osp command in a string."""
         try:
             tree = secET.fromstring(data)
-        except secET.ParseError:
+        except secET.ParseError as e:
             logger.debug("Erroneous client input: %s", data)
-            raise OspdCommandError('Invalid data') from None
+            raise OspdCommandError('Invalid data') from e
 
         command_name = tree.tag
 
@@ -1295,7 +1221,7 @@ class OSPDaemon:
         if self.scan_exists(scan_id) and command_name == "get_scans":
             if write_success:
                 logger.debug(
-                    '%s: Results sent succesfully to the client. Cleaning '
+                    '%s: Results sent successfully to the client. Cleaning '
                     'temporary result list.',
                     scan_id,
                 )
@@ -1362,6 +1288,7 @@ class OSPDaemon:
                 self.set_scan_status(scan_id, ScanStatus.INIT)
 
                 current_queued_scans = current_queued_scans - 1
+                self.last_scan_start_time = time.time()
                 logger.info('Starting scan %s.', scan_id)
             elif scan_is_queued and not scan_allowed:
                 return
@@ -1395,6 +1322,20 @@ class OSPDaemon:
         if not self.min_free_mem_scan_queue:
             return True
 
+        # If min_free_mem_scan_queue option is set, also wait some time
+        # between scans. Consider the case in which the last scan
+        # finished in a few seconds and there is no need to wait.
+        time_between_start_scan = time.time() - self.last_scan_start_time
+        if (
+            time_between_start_scan < MIN_TIME_BETWEEN_START_SCAN
+            and self.get_count_running_scans()
+        ):
+            logger.debug(
+                'Not possible to run a new scan right now, a scan have been '
+                'just started.'
+            )
+            return False
+
         free_mem = psutil.virtual_memory().available / (1024 * 1024)
 
         if free_mem > self.min_free_mem_scan_queue:
@@ -1415,7 +1356,7 @@ class OSPDaemon:
 
     def wait_for_children(self):
         """ Join the zombie process to releases resources."""
-        for scan_id in self.scan_processes:
+        for scan_id, _ in self.scan_processes.items():
             self.scan_processes[scan_id].join(0)
 
     def create_scan(
@@ -1529,6 +1470,15 @@ class OSPDaemon:
         count = 0
         for scan_id in self.scan_collection.ids_iterator():
             if self.get_scan_status(scan_id) == ScanStatus.QUEUED:
+                count += 1
+        return count
+
+    def get_count_running_scans(self) -> int:
+        """ Get the amount of scans with INIT/RUNNING status """
+        count = 0
+        for scan_id in self.scan_collection.ids_iterator():
+            status = self.get_scan_status(scan_id)
+            if status == ScanStatus.RUNNING or status == ScanStatus.INIT:
                 count += 1
         return count
 

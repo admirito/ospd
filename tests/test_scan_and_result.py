@@ -238,8 +238,7 @@ class ScanTestCase(unittest.TestCase):
         )
         fs = FakeStream()
         self.daemon.handle_command(
-            '<get_vts filter="modification_time&lt;19000203"></get_vts>',
-            fs,
+            '<get_vts filter="modification_time&lt;19000203"></get_vts>', fs
         )
         response = fs.get_response()
 
@@ -742,8 +741,7 @@ class ScanTestCase(unittest.TestCase):
 
         fs = FakeStream()
         self.daemon.handle_command(
-            '<get_scans scan_id="%s" pop_results="1"/>' % scan_id,
-            fs,
+            '<get_scans scan_id="%s" pop_results="1"/>' % scan_id, fs
         )
 
         res_len = len(
@@ -773,8 +771,7 @@ class ScanTestCase(unittest.TestCase):
 
         fs = FakeStream(return_value=False)
         self.daemon.handle_command(
-            '<get_scans scan_id="%s" pop_results="1"/>' % scan_id,
-            fs,
+            '<get_scans scan_id="%s" pop_results="1"/>' % scan_id, fs
         )
 
         res_len = len(
@@ -870,9 +867,7 @@ class ScanTestCase(unittest.TestCase):
 
         self.assertEqual(response.get('status'), '200')
 
-        cred_dict = {
-            'snmp': {'type': 'up', 'community': ''},
-        }
+        cred_dict = {'snmp': {'type': 'up', 'community': ''}}
         scan_id = response.findtext('id')
         response = self.daemon.get_scan_credentials(scan_id)
         self.assertEqual(response, cred_dict)
@@ -923,6 +918,78 @@ class ScanTestCase(unittest.TestCase):
         time.sleep(1)
         target_options = self.daemon.get_scan_target_options(scan_id)
         self.assertEqual(target_options, {'alive_test': '0'})
+
+    def test_scan_get_target_options_alive_test_methods(self):
+        fs = FakeStream()
+        self.daemon.handle_command(
+            '<start_scan>'
+            '<scanner_params /><vts><vt id="1.2.3.4" />'
+            '</vts>'
+            '<targets>'
+            '<target><hosts>192.168.0.1</hosts>'
+            '<ports>22</ports>'
+            '<alive_test_methods>'
+            '<icmp>1</icmp>'
+            '<tcp_syn>1</tcp_syn>'
+            '<tcp_ack>1</tcp_ack>'
+            '<arp>1</arp>'
+            '<consider_alive>1</consider_alive>'
+            '</alive_test_methods>'
+            '</target>'
+            '</targets>'
+            '</start_scan>',
+            fs,
+        )
+        self.daemon.start_queued_scans()
+
+        response = fs.get_response()
+
+        scan_id = response.findtext('id')
+        time.sleep(1)
+        target_options = self.daemon.get_scan_target_options(scan_id)
+        self.assertEqual(
+            target_options,
+            {
+                'alive_test_methods': '1',
+                'icmp': '1',
+                'tcp_syn': '1',
+                'tcp_ack': '1',
+                'arp': '1',
+                'consider_alive': '1',
+            },
+        )
+
+    def test_scan_get_target_options_alive_test_methods_dont_add_empty_or_missing(  # pylint: disable=line-too-long
+        self,
+    ):
+        fs = FakeStream()
+        self.daemon.handle_command(
+            '<start_scan>'
+            '<scanner_params /><vts><vt id="1.2.3.4" />'
+            '</vts>'
+            '<targets>'
+            '<target><hosts>192.168.0.1</hosts>'
+            '<ports>22</ports>'
+            '<alive_test_methods>'
+            '<icmp>1</icmp>'
+            '<arp></arp>'
+            '<consider_alive></consider_alive>'
+            '</alive_test_methods>'
+            '</target>'
+            '</targets>'
+            '</start_scan>',
+            fs,
+        )
+        self.daemon.start_queued_scans()
+
+        response = fs.get_response()
+
+        scan_id = response.findtext('id')
+        time.sleep(1)
+        target_options = self.daemon.get_scan_target_options(scan_id)
+        self.assertEqual(
+            target_options, {'alive_test_methods': '1', 'icmp': '1'}
+        )
 
     def test_progress(self):
 
@@ -1114,6 +1181,27 @@ class ScanTestCase(unittest.TestCase):
         progress = self.daemon.get_scan_progress(scan_id)
         self.assertEqual(progress, 33)
 
+    def test_get_scan_host_progress(self):
+        fs = FakeStream()
+        self.daemon.handle_command(
+            '<start_scan parallel="2">'
+            '<scanner_params />'
+            '<targets><target>'
+            '<hosts>localhost</hosts>'
+            '<ports>22</ports>'
+            '</target></targets>'
+            '</start_scan>',
+            fs,
+        )
+        self.daemon.start_queued_scans()
+        response = fs.get_response()
+
+        scan_id = response.findtext('id')
+        self.daemon.set_scan_host_progress(scan_id, 'localhost', 45)
+        self.assertEqual(
+            self.daemon.get_scan_host_progress(scan_id, 'localhost'), 45
+        )
+
     def test_get_scan_without_scanid(self):
 
         fs = FakeStream()
@@ -1162,6 +1250,35 @@ class ScanTestCase(unittest.TestCase):
         count = self.daemon.scan_collection.get_count_total(scan_id)
         self.assertEqual(count, 3)
 
+    def test_set_scan_total_hosts_zero(self):
+
+        fs = FakeStream()
+        self.daemon.handle_command(
+            '<start_scan parallel="2">'
+            '<scanner_params />'
+            '<targets><target>'
+            '<hosts>localhost1, localhost2, localhost3, localhost4</hosts>'
+            '<ports>22</ports>'
+            '</target></targets>'
+            '</start_scan>',
+            fs,
+        )
+        self.daemon.start_queued_scans()
+
+        response = fs.get_response()
+        scan_id = response.findtext('id')
+
+        # Default calculated by ospd with the hosts in the target
+        count = self.daemon.scan_collection.get_count_total(scan_id)
+        self.assertEqual(count, 4)
+
+        # Set to 0 (all hosts unresolved, dead, invalid target) via
+        # the server. This one has priority and must be still 0 and
+        # never overwritten with the calculation from host list
+        self.daemon.set_scan_total_hosts(scan_id, 0)
+        count = self.daemon.scan_collection.get_count_total(scan_id)
+        self.assertEqual(count, 0)
+
     def test_set_scan_total_hosts_invalid_target(self):
 
         fs = FakeStream()
@@ -1187,6 +1304,39 @@ class ScanTestCase(unittest.TestCase):
         self.daemon.set_scan_total_hosts(scan_id, -1)
         count = self.daemon.scan_collection.get_count_total(scan_id)
         self.assertEqual(count, 0)
+
+    def test_scan_invalid_excluded_hosts(self):
+
+        logging.Logger.warning = Mock()
+        fs = FakeStream()
+        self.daemon.handle_command(
+            '<start_scan parallel="2">'
+            '<scanner_params />'
+            '<targets><target>'
+            '<hosts>192.168.0.0/24</hosts>'
+            '<exclude_hosts>192.168.0.1-192.168.0.200,10.0.0.0/24'
+            '</exclude_hosts>'
+            '<ports>22</ports>'
+            '</target></targets>'
+            '</start_scan>',
+            fs,
+        )
+        self.daemon.start_queued_scans()
+
+        response = fs.get_response()
+        scan_id = response.findtext('id')
+
+        # Count only the excluded hosts present in the original target.
+        count = self.daemon.scan_collection.get_simplified_exclude_host_count(
+            scan_id
+        )
+        self.assertEqual(count, 200)
+
+        logging.Logger.warning.assert_called_with(  # pylint: disable=no-member
+            "Please check the excluded host list. It contains hosts "
+            "which do not belong to the target. This warning can be ignored if "
+            "this was done on purpose (e.g. to exclude specific hostname)."
+        )
 
     def test_get_scan_progress_xml(self):
 
@@ -1215,8 +1365,7 @@ class ScanTestCase(unittest.TestCase):
 
         fs = FakeStream()
         self.daemon.handle_command(
-            '<get_scans scan_id="%s" details="0" progress="1"/>' % scan_id,
-            fs,
+            '<get_scans scan_id="%s" details="0" progress="1"/>' % scan_id, fs
         )
         response = fs.get_response()
 
@@ -1292,10 +1441,7 @@ class ScanTestCase(unittest.TestCase):
             '</start_scan>'
         )
 
-        self.daemon.handle_command(
-            cmd,
-            fs,
-        )
+        self.daemon.handle_command(cmd, fs)
         self.daemon.start_queued_scans()
 
         response = fs.get_response()
@@ -1413,6 +1559,79 @@ class ScanTestCase(unittest.TestCase):
         self.assertTrue(self.daemon.is_enough_free_memory())
 
     @patch("ospd.ospd.psutil")
+    def test_wait_between_scan_no_scans(self, mock_psutil):
+        # Enable option
+        self.daemon.min_free_mem_scan_queue = 1000
+        # 1.5 GB free
+        mock_psutil.virtual_memory.return_value = FakePsutil(
+            available=1500000000
+        )
+        # Not enough time between scans, but no running scan
+        self.daemon.last_scan_start_time = time.time() - 20
+
+        self.assertTrue(self.daemon.is_enough_free_memory())
+
+    @patch("ospd.ospd.psutil")
+    def test_wait_between_scan_run_scans_not_allow(self, mock_psutil):
+        # Enable option
+        self.daemon.min_free_mem_scan_queue = 1000
+        # 1.5 GB free
+        mock_psutil.virtual_memory.return_value = FakePsutil(
+            available=1500000000
+        )
+
+        fs = FakeStream()
+        self.daemon.handle_command(
+            '<start_scan>'
+            '<scanner_params /><vts><vt id="1.2.3.4" />'
+            '</vts>'
+            '<targets><target>'
+            '<hosts>localhosts,192.168.0.0/24</hosts>'
+            '<ports>80,443</ports>'
+            '</target></targets>'
+            '</start_scan>',
+            fs,
+        )
+
+        # There is a running scan
+        self.daemon.start_queued_scans()
+
+        # Not enough time between scans
+        self.daemon.last_scan_start_time = time.time() - 20
+
+        self.assertFalse(self.daemon.is_enough_free_memory())
+
+    @patch("ospd.ospd.psutil")
+    def test_wait_between_scan_allow(self, mock_psutil):
+        # Enable option
+        self.daemon.min_free_mem_scan_queue = 1000
+        # 1.5 GB free
+        mock_psutil.virtual_memory.return_value = FakePsutil(
+            available=1500000000
+        )
+
+        fs = FakeStream()
+        self.daemon.handle_command(
+            '<start_scan>'
+            '<scanner_params /><vts><vt id="1.2.3.4" />'
+            '</vts>'
+            '<targets><target>'
+            '<hosts>localhosts,192.168.0.0/24</hosts>'
+            '<ports>80,443</ports>'
+            '</target></targets>'
+            '</start_scan>',
+            fs,
+        )
+
+        # There is a running scan, enough memory and enough time
+        # in between
+        self.daemon.start_queued_scans()
+
+        self.daemon.last_scan_start_time = time.time() - 65
+
+        self.assertTrue(self.daemon.is_enough_free_memory())
+
+    @patch("ospd.ospd.psutil")
     def test_free_memory_false(self, mock_psutil):
         self.daemon.min_free_mem_scan_queue = 2000
         # 1.5 GB free
@@ -1439,6 +1658,24 @@ class ScanTestCase(unittest.TestCase):
         self.assertEqual(self.daemon.get_count_queued_scans(), 1)
         self.daemon.start_queued_scans()
         self.assertEqual(self.daemon.get_count_queued_scans(), 0)
+
+    def test_count_running_scans(self):
+        fs = FakeStream()
+        self.daemon.handle_command(
+            '<start_scan>'
+            '<scanner_params /><vts><vt id="1.2.3.4" />'
+            '</vts>'
+            '<targets><target>'
+            '<hosts>localhosts,192.168.0.0/24</hosts>'
+            '<ports>80,443</ports>'
+            '</target></targets>'
+            '</start_scan>',
+            fs,
+        )
+
+        self.assertEqual(self.daemon.get_count_running_scans(), 0)
+        self.daemon.start_queued_scans()
+        self.assertEqual(self.daemon.get_count_running_scans(), 1)
 
     def test_ids_iterator_dict_modified(self):
         self.daemon.scan_collection.scans_table = {'a': 1, 'b': 2}

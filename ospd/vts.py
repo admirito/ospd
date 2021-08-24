@@ -23,14 +23,7 @@ from hashlib import sha256
 import re
 
 from copy import deepcopy
-from typing import (
-    Dict,
-    Any,
-    Type,
-    Iterator,
-    Iterable,
-    Tuple,
-)
+from typing import Dict, Any, Type, Iterator, Iterable, Tuple
 
 from ospd.errors import OspdError
 
@@ -41,9 +34,7 @@ DEFAULT_VT_ID_PATTERN = re.compile("[0-9a-zA-Z_\\-:.]{1,80}")
 
 class Vts:
     def __init__(
-        self,
-        storage: Type[Dict] = None,
-        vt_id_pattern=DEFAULT_VT_ID_PATTERN,
+        self, storage: Type[Dict] = None, vt_id_pattern=DEFAULT_VT_ID_PATTERN
     ):
         self.storage = storage
 
@@ -59,10 +50,6 @@ class Vts:
     def __iter__(self) -> Iterator[str]:
         if hasattr(self.vts, '__iter__'):
             return self.vts.__iter__()
-
-        # Use iter because python3.5 has no support for
-        # iteration over DictProxy.
-        return iter(self.vts.keys())
 
     def __getitem__(self, key):
         return self.vts[key]

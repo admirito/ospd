@@ -24,7 +24,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
   <name>Open Scanner Protocol</name>
   <abbreviation>OSP</abbreviation>
   <summary>The Open Scanner Protocol</summary>
-  <version>20.08</version>
+  <version>21.04</version>
 
   <!-- Types. -->
 
@@ -179,7 +179,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
       <e>credentials</e>
       <e>exclude_hosts</e>
       <e>finished_hosts</e>
-      <e>alive_test</e>
+      <e>alive_test_ports</e>
+      <or>
+        <e>alive_test</e>
+        <e>alive_test_methods</e>
+      </or>
       <e>reverse_lookup_unify</e>
       <e>reverse_lookup_only</e>
     </pattern>
@@ -195,52 +199,102 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
     </ele>
     <ele>
       <name>credentials</name>
-      <summary>One or many credentials containing the credential for the given hosts.</summary>
+      <summary>One or many credentials containing the credential for the given hosts</summary>
       <pattern>
         <e>credential</e>
       </pattern>
     </ele>
     <ele>
       <name>exclude_hosts</name>
-      <summary>One or many hosts to exclude. The list is comma-separated. Each entry can be a IP address, a CIDR notation, a hostname, a IP range. IPs can be v4 or v6. Each wrapper must handle the exclude hosts.
+      <summary>One or many hosts to exclude. The list is comma-separated. Each entry can be a IP address, a CIDR notation, a hostname, a IP range. IPs can be v4 or v6. Each wrapper must handle the exclude hosts
       </summary>
       <type>string</type>
     </ele>
     <ele>
       <name>finished_hosts</name>
-      <summary>One or many finished hosts to exclude when the client resumes a task. The list is comma-separated. Each entry can be an IP address, a CIDR notation, a hostname, a IP range. IPs can be v4 or v6. The listed hosts will be set as finished before starting the scan. Each wrapper must handle the finished hosts.
+      <summary>One or many finished hosts to exclude when the client resumes a task. The list is comma-separated. Each entry can be an IP address, a CIDR notation, a hostname, a IP range. IPs can be v4 or v6. The listed hosts will be set as finished before starting the scan. Each wrapper must handle the finished hosts
       </summary>
       <type>string</type>
     </ele>
     <ele>
       <name>alive_test</name>
-      <summary>Alive test type to be performed against the target.</summary>
+      <summary>Alive test type to be performed against the target</summary>
+      <type>integer</type>
+    </ele>
+    <ele>
+      <name>alive_test_methods</name>
+      <summary>Alive test methods to be performed against the target</summary>
+      <pattern>
+        <e>icmp</e>
+      </pattern>
+      <ele>
+        <name>icmp</name>
+        <summary>ICMP ping</summary>
+        <type>boolean</type>
+      </ele>
+      <pattern>
+        <e>tcp_syn</e>
+      </pattern>
+      <ele>
+        <name>tcp_syn</name>
+        <summary>TCP-SYN ping</summary>
+        <type>boolean</type>
+      </ele>
+      <pattern>
+        <e>tcp_ack</e>
+      </pattern>
+      <ele>
+        <name>tcp_ack</name>
+        <summary>TCP-ACK ping</summary>
+        <type>boolean</type>
+      </ele>
+      <pattern>
+        <e>arp</e>
+      </pattern>
+      <ele>
+        <name>arp</name>
+        <summary>ARP ping</summary>
+        <type>boolean</type>
+      </ele>
+      <pattern>
+        <e>consider_alive</e>
+      </pattern>
+      <ele>
+        <name>consider_alive</name>
+        <summary>Consider the target to be alive</summary>
+        <type>boolean</type>
+      </ele>
+    </ele>
+    <ele>
+      <name>alive_test_ports</name>
+      <summary>Dedicated port list for alive detection. Used for TCP-SYN and TCP-ACK ping when Boreas (scanner preference test_alive_hosts_only) is enabled. If no port list is provided ports 80, 137, 587, 3128, 8081 are used as defaults</summary>
       <type>string</type>
     </ele>
     <ele>
       <name>reverse_lookup_only</name>
-      <summary>Only scan IP addresses that can be resolved into a DNS name.</summary>
+      <summary>Only scan IP addresses that can be resolved into a DNS name</summary>
       <type>string</type>
     </ele>
     <ele>
       <name>reverse_lookup_unify</name>
-      <summary>If multiple IP addresses resolve to the same DNS name the DNS name will only get scanned once.</summary>
+      <summary>If multiple IP addresses resolve to the same DNS name the DNS name will only get scanned once</summary>
       <type>string</type>
     </ele>
     <example>
-      <summary>Target without credentials.</summary>
+      <summary>Target without credentials</summary>
       <e>
         <target>
           <hosts>example.org</hosts>
           <ports>T:22,U:5060</ports>
           <alive_test>0</alive_test>
+          <alive_test_ports>22,80,123</alive_test_ports>
           <reverse_lookup_only>0</reverse_lookup_only>
           <reverse_lookup_unify>0</reverse_lookup_unify>
         </target>
       </e>
     </example>
     <example>
-      <summary>Target with two credentials.</summary>
+      <summary>Target with two credentials</summary>
       <e>
         <target>
           <hosts>192.168.1.0/24</hosts>
@@ -1052,7 +1106,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
           <ele>
             <name>severities</name>
             <pattern>
-              <e>severity</e>
+              <any><e>severity</e></any>
             </pattern>
             <ele>
               <name>severity</name>
@@ -1061,12 +1115,25 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
                   <name>type</name>
                   <type>string</type>
                 </attrib>
-                <attrib>
-                  <name>origin</name>
-                  <summary>Optional reference to the origin of the severity</summary>
-                  <type>string</type>
-                </attrib>
+                <e>origin</e>
+                <e>date</e>
+                <e>value</e>
               </pattern>
+              <ele>
+                <name>origin</name>
+                <summary>Optional reference to the origin of the severity</summary>
+                <type>string</type>
+              </ele>
+              <ele>
+                <name>date</name>
+                <summary>Optional timestamp in seconds since epoch. Defaults to VT creation date</summary>
+                <type>string</type>
+              </ele>
+              <ele>
+                <name>value</name>
+                <summary>The actual value, the format must correspond with the type</summary>
+                <type>string</type>
+              </ele>
             </ele>
           </ele>
           <ele>
@@ -1120,7 +1187,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
               </solution>
               <detection qod_type="package">Get the installed version with the help of detect NVT and check if the version is vulnerable or not.</detection>
               <severities>
-                <severity type="cvss_base_v2" origin="CVE-2014-9116">AV:N/AC:L/Au:N/C:N/I:N/A:P</severity>
+                <severity type="cvss_base_v2">
+                  <origin>CVE-2014-9116</origin>
+                  <date>1200603949</date>
+                  <value>AV:N/AC:L/Au:N/C:N/I:N/A:P</value>
+                </severity>
               </severities>
             </vt>
           </vts>
@@ -1151,7 +1222,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
               </solution>
               <detection qod_type="package">Get the installed version with the help of detect NVT and check if the version is vulnerable or not.</detection>
               <severities>
-                <severity type="cvss_base_v2" origin="CVE-2014-9116">AV:N/AC:L/Au:N/C:N/I:N/A:P</severity>
+                <severity type="cvss_base_v2">
+                  <origin>CVE-2014-9116</origin>
+                  <date>1200603949</date>
+                  <value>AV:N/AC:L/Au:N/C:N/I:N/A:P</value>
+                </severity>
               </severities>
             </vt>
           </vts>
@@ -1472,6 +1547,32 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
   </parameter_type>
 
   <change>
+    <command>START_SCAN</command>
+    <summary>Add support for dedicated port list for alive detection</summary>
+    <description>Target element received new target option alive_test_ports.
+    </description>
+    <version>21.04</version>
+  </change>
+
+  <change>
+    <command>START_SCAN</command>
+    <summary>Add support for supplying alive test methods via separate elements.</summary>
+    <description>Target element received new optional target option alive_test_methods with subelements imcp, tcp_ack, tcp_syn, arp and consider_alive.
+    </description>
+    <version>21.04</version>
+  </change>
+
+  <change>
+    <command>GET_VTS</command>
+    <summary>Returned object changes and extends severity information</summary>
+    <description>
+      The element SEVERITY inside SEVERITIES of the returned VT moves the origin and the value
+      into explicit elements ORIGIN and VALUE. Furthremore the element DATE is added.
+    </description>
+    <version>21.04</version>
+  </change>
+
+  <change>
     <command>GET_VTS</command>
     <summary>Returned object extended with solution method</summary>
     <description>
@@ -1499,10 +1600,36 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
     <version>20.08</version>
   </change>
 
+    <change>
+    <command>GET_VTS</command>
+    <summary>Add attribute SHA256_HASH</summary>
+    <description>
+      The new attribute SHA256_HASH is calculated from the vulnerability test OID, modification time and VT preferences, sorted by OID. The new attribute is helpful for feed integrity check.
+    </description>
+    <version>20.08</version>
+  </change>
+
+  <change>
+    <command>GET_VTS</command>
+    <summary>Add attribute VTS_VERSION</summary>
+    <description>
+      The feed version is included in the get_vts command response.
+    </description>
+    <version>20.08</version>
+  </change>
+
   <change>
     <command>START_SCAN</command>
     <summary>Add support for target options</summary>
     <description>Target element receive new target options reverse_lookup_only, reverse_lookup_unify and alive_test.
+    </description>
+    <version>20.08</version>
+  </change>
+
+  <change>
+    <command>GET_SCANS</command>
+    <summary>Add scan progress details</summary>
+    <description>New attribute PROGRESS to specify whether to return a detailed progress information.
     </description>
     <version>20.08</version>
   </change>

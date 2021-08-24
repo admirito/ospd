@@ -4,12 +4,49 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## (20.8.2) - 2021-02-01
+## [21.4.3] - 2021-08-04
+### Changed
+- Stopping scan. [#437](https://github.com/greenbone/ospd/pull/437)
+
+[21.4.3]: https://github.com/greenbone/ospd/compare/v21.4.1...v21.4.3
+
+## [21.4.1] - 2021-06-23
+
+### Fixed
+
+[21.4.1]: https://github.com/greenbone/ospd/compare/v21.4.0...ospd-21.04
+
+## [21.4.0] (2021-04-16)
+
+### Added
+- Add target option for supplying dedicated port list for alive detection (Boreas only) via OSP. [#323](https://github.com/greenbone/ospd/pull/323)
+- Add target option for supplying alive test methods via separate elements. [#329](https://github.com/greenbone/ospd/pull/329)
+
+### Removed
+- Remove python3.5 support and deprecated methods. [#316](https://github.com/greenbone/ospd/pull/316)
+
+[21.4.0]: https://github.com/greenbone/ospd/compare/ospd-20.08...v21.4.0
+
+## [21.4.3] - 2021-08-04
+### Changed
+- Stopping scan. [#437](https://github.com/greenbone/ospd/pull/437)
+
+## [21.4.3] - 2021-08-04### Fixed
+- Do not start all queued scans simultaneously once available memory is enough. [#401](https://github.com/greenbone/ospd/pull/401)
+- Remove the pid file if there is no process for the pid or the process name does not match. [#405](https://github.com/greenbone/ospd/pull/405)
+- Fix regex of gvmcg titles for get_performance command. [#413](https://github.com/greenbone/ospd/pull/413)
+
+[21.4.3]: https://github.com/greenbone/ospd/compare/v21.4.1...v21.4.3
+
+[21.4.3]: https://github.com/greenbone/ospd/compare/v20.8.2...v21.4.3
+
+## [20.8.2] (2021-02-01)
 
 ### Added
 - Allow the scanner to update total count of hosts. [#332](https://github.com/greenbone/ospd/pull/332)
 - Add more debug logging. [#352](https://github.com/greenbone/ospd/pull/352)
 - Set end_time for interrupted scans. [#353](https://github.com/greenbone/ospd/pull/353)
+- Add method to get a single host scan progress. [#363](https://github.com/greenbone/ospd/pull/363)
 
 ### Fixed
 - Fix OSP version. [#326](https://github.com/greenbone/ospd/pull/326)
@@ -18,6 +55,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Fix malformed target. [#341](https://github.com/greenbone/ospd/pull/341)
 - Initialize end_time with create_scan. [#354](https://github.com/greenbone/ospd/pull/354)
 - Fix get_count_total(). Accept -1 value set by the server. [#355](https://github.com/greenbone/ospd/pull/355)
+- Fix get_count_total(). Consider 0 value set by the server. [#366](https://github.com/greenbone/ospd/pull/366)
+- Remove exclude hosts which do not belong to the target for the scan progress calculation.
+  [#377](https://github.com/greenbone/ospd/pull/377)
+  [#380](https://github.com/greenbone/ospd/pull/380)
 
 [20.8.2]: https://github.com/greenbone/ospd/compare/v20.8.1...ospd-20.08
 
